@@ -40,8 +40,8 @@ namespace PolyVox
 		SOBEL_SMOOTHED ///<Smoothest
 	};
 
-	template<typename VolumeType>
-	Vector3DFloat computeCentralDifferenceGradient(const typename VolumeType::Sampler& volIter);
+	template<typename VolumeType, typename ToDensityFunc>
+	Vector3DFloat computeCentralDifferenceGradient(const typename VolumeType::Sampler& volIter, ToDensityFunc toDensity = [](VolumeType::VoxelType v) { return static_cast<float>(v);  });
 
 	template<typename VolumeType>
 	Vector3DFloat computeSmoothCentralDifferenceGradient(typename VolumeType::Sampler& volIter);

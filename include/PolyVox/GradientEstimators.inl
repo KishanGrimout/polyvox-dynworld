@@ -23,24 +23,24 @@ freely, subject to the following restrictions:
 
 namespace PolyVox
 {
-	template<typename VolumeType>
-	Vector3DFloat computeCentralDifferenceGradient(const typename VolumeType::Sampler& volIter)
+	template<typename VolumeType, typename ToDensityFunc>
+	Vector3DFloat computeCentralDifferenceGradient(const typename VolumeType::Sampler& volIter, ToDensityFunc toDensity)
 	{
 		//FIXME - bitwise way of doing this?
-		typename VolumeType::VoxelType voxel1nx = volIter.peekVoxel1nx0py0pz() > 0 ? 1: 0;
-		typename VolumeType::VoxelType voxel1px = volIter.peekVoxel1px0py0pz() > 0 ? 1: 0;
+		typename VolumeType::VoxelType voxel1nx = volIter.peekVoxel1nx0py0pz();
+		typename VolumeType::VoxelType voxel1px = volIter.peekVoxel1px0py0pz();
 
-		typename VolumeType::VoxelType voxel1ny = volIter.peekVoxel0px1ny0pz() > 0 ? 1: 0;
-		typename VolumeType::VoxelType voxel1py = volIter.peekVoxel0px1py0pz() > 0 ? 1: 0;
+		typename VolumeType::VoxelType voxel1ny = volIter.peekVoxel0px1ny0pz();
+		typename VolumeType::VoxelType voxel1py = volIter.peekVoxel0px1py0pz();
 
-		typename VolumeType::VoxelType voxel1nz = volIter.peekVoxel0px0py1nz() > 0 ? 1: 0;
-		typename VolumeType::VoxelType voxel1pz = volIter.peekVoxel0px0py1pz() > 0 ? 1: 0;
+		typename VolumeType::VoxelType voxel1nz = volIter.peekVoxel0px0py1nz();
+		typename VolumeType::VoxelType voxel1pz = volIter.peekVoxel0px0py1pz();
 
 		return Vector3DFloat
 		(
-			static_cast<float>(voxel1nx) - static_cast<float>(voxel1px),
-			static_cast<float>(voxel1ny) - static_cast<float>(voxel1py),
-			static_cast<float>(voxel1nz) - static_cast<float>(voxel1pz)
+			toDensity(voxel1nx) - toDensity(voxel1px),
+			toDensity(voxel1ny) - toDensity(voxel1py),
+			toDensity(voxel1nz) - toDensity(voxel1pz)
 		);
 	}
 

@@ -67,7 +67,7 @@ namespace PolyVox
 	template <typename VoxelType>
 	PagedVolume<VoxelType>::Chunk::~Chunk()
 	{
-		if (m_bDataModified && m_pPager)
+		if (m_pPager)
 		{
 			// From the coordinates of the chunk we deduce the coordinates of the contained voxels.
 			Vector3DInt32 v3dLower = m_v3dChunkSpacePosition * static_cast<int32_t>(m_uSideLength);

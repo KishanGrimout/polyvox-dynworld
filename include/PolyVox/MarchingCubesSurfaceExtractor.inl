@@ -48,6 +48,93 @@ namespace PolyVox
 			);
 	}
 
+	template< typename Sampler, typename ControllerType>
+	Vector3DFloat computeSobelGradient(const Sampler& volIter, ControllerType& controller)
+	{
+		static const int weights[3][3][3] = { { { 2, 3, 2 }, { 3, 6, 3 }, { 2, 3, 2 } }, {
+			{ 3, 6, 3 }, { 6, 0, 6 }, { 3, 6, 3 } }, { { 2, 3, 2 }, { 3, 6, 3 }, { 2, 3, 2 } } };
+
+		//FIXME - Should actually use DensityType here, both in principle and because the maths may be
+		//faster (and to reduce casts). So it would be good to add a way to get DensityType from a voxel.
+		//But watch out for when the DensityType is unsigned and the difference could be negative.
+		const float pVoxel1nx1ny1nz = static_cast<float>(controller.convertToDensity(volIter.peekVoxel1nx1ny1nz()));
+		const float pVoxel1nx1ny0pz = static_cast<float>(controller.convertToDensity(volIter.peekVoxel1nx1ny0pz()));
+		const float pVoxel1nx1ny1pz = static_cast<float>(controller.convertToDensity(volIter.peekVoxel1nx1ny1pz()));
+		const float pVoxel1nx0py1nz = static_cast<float>(controller.convertToDensity(volIter.peekVoxel1nx0py1nz()));
+		const float pVoxel1nx0py0pz = static_cast<float>(controller.convertToDensity(volIter.peekVoxel1nx0py0pz()));
+		const float pVoxel1nx0py1pz = static_cast<float>(controller.convertToDensity(volIter.peekVoxel1nx0py1pz()));
+		const float pVoxel1nx1py1nz = static_cast<float>(controller.convertToDensity(volIter.peekVoxel1nx1py1nz()));
+		const float pVoxel1nx1py0pz = static_cast<float>(controller.convertToDensity(volIter.peekVoxel1nx1py0pz()));
+		const float pVoxel1nx1py1pz = static_cast<float>(controller.convertToDensity(volIter.peekVoxel1nx1py1pz()));
+
+		const float pVoxel0px1ny1nz = static_cast<float>(controller.convertToDensity(volIter.peekVoxel0px1ny1nz()));
+		const float pVoxel0px1ny0pz = static_cast<float>(controller.convertToDensity(volIter.peekVoxel0px1ny0pz()));
+		const float pVoxel0px1ny1pz = static_cast<float>(controller.convertToDensity(volIter.peekVoxel0px1ny1pz()));
+		const float pVoxel0px0py1nz = static_cast<float>(controller.convertToDensity(volIter.peekVoxel0px0py1nz()));
+		//const float pVoxel0px0py0pz = static_cast<float>(controller.convertToDensity(volIter.peekVoxel0px0py0pz()));
+		const float pVoxel0px0py1pz = static_cast<float>(controller.convertToDensity(volIter.peekVoxel0px0py1pz()));
+		const float pVoxel0px1py1nz = static_cast<float>(controller.convertToDensity(volIter.peekVoxel0px1py1nz()));
+		const float pVoxel0px1py0pz = static_cast<float>(controller.convertToDensity(volIter.peekVoxel0px1py0pz()));
+		const float pVoxel0px1py1pz = static_cast<float>(controller.convertToDensity(volIter.peekVoxel0px1py1pz()));
+
+		const float pVoxel1px1ny1nz = static_cast<float>(controller.convertToDensity(volIter.peekVoxel1px1ny1nz()));
+		const float pVoxel1px1ny0pz = static_cast<float>(controller.convertToDensity(volIter.peekVoxel1px1ny0pz()));
+		const float pVoxel1px1ny1pz = static_cast<float>(controller.convertToDensity(volIter.peekVoxel1px1ny1pz()));
+		const float pVoxel1px0py1nz = static_cast<float>(controller.convertToDensity(volIter.peekVoxel1px0py1nz()));
+		const float pVoxel1px0py0pz = static_cast<float>(controller.convertToDensity(volIter.peekVoxel1px0py0pz()));
+		const float pVoxel1px0py1pz = static_cast<float>(controller.convertToDensity(volIter.peekVoxel1px0py1pz()));
+		const float pVoxel1px1py1nz = static_cast<float>(controller.convertToDensity(volIter.peekVoxel1px1py1nz()));
+		const float pVoxel1px1py0pz = static_cast<float>(controller.convertToDensity(volIter.peekVoxel1px1py0pz()));
+		const float pVoxel1px1py1pz = static_cast<float>(controller.convertToDensity(volIter.peekVoxel1px1py1pz()));
+
+		const float xGrad(-weights[0][0][0] * pVoxel1nx1ny1nz -
+			weights[1][0][0] * pVoxel1nx1ny0pz - weights[2][0][0] *
+			pVoxel1nx1ny1pz - weights[0][1][0] * pVoxel1nx0py1nz -
+			weights[1][1][0] * pVoxel1nx0py0pz - weights[2][1][0] *
+			pVoxel1nx0py1pz - weights[0][2][0] * pVoxel1nx1py1nz -
+			weights[1][2][0] * pVoxel1nx1py0pz - weights[2][2][0] *
+			pVoxel1nx1py1pz + weights[0][0][2] * pVoxel1px1ny1nz +
+			weights[1][0][2] * pVoxel1px1ny0pz + weights[2][0][2] *
+			pVoxel1px1ny1pz + weights[0][1][2] * pVoxel1px0py1nz +
+			weights[1][1][2] * pVoxel1px0py0pz + weights[2][1][2] *
+			pVoxel1px0py1pz + weights[0][2][2] * pVoxel1px1py1nz +
+			weights[1][2][2] * pVoxel1px1py0pz + weights[2][2][2] *
+			pVoxel1px1py1pz);
+
+		const float yGrad(-weights[0][0][0] * pVoxel1nx1ny1nz -
+			weights[1][0][0] * pVoxel1nx1ny0pz - weights[2][0][0] *
+			pVoxel1nx1ny1pz + weights[0][2][0] * pVoxel1nx1py1nz +
+			weights[1][2][0] * pVoxel1nx1py0pz + weights[2][2][0] *
+			pVoxel1nx1py1pz - weights[0][0][1] * pVoxel0px1ny1nz -
+			weights[1][0][1] * pVoxel0px1ny0pz - weights[2][0][1] *
+			pVoxel0px1ny1pz + weights[0][2][1] * pVoxel0px1py1nz +
+			weights[1][2][1] * pVoxel0px1py0pz + weights[2][2][1] *
+			pVoxel0px1py1pz - weights[0][0][2] * pVoxel1px1ny1nz -
+			weights[1][0][2] * pVoxel1px1ny0pz - weights[2][0][2] *
+			pVoxel1px1ny1pz + weights[0][2][2] * pVoxel1px1py1nz +
+			weights[1][2][2] * pVoxel1px1py0pz + weights[2][2][2] *
+			pVoxel1px1py1pz);
+
+		const float zGrad(-weights[0][0][0] * pVoxel1nx1ny1nz +
+			weights[2][0][0] * pVoxel1nx1ny1pz - weights[0][1][0] *
+			pVoxel1nx0py1nz + weights[2][1][0] * pVoxel1nx0py1pz -
+			weights[0][2][0] * pVoxel1nx1py1nz + weights[2][2][0] *
+			pVoxel1nx1py1pz - weights[0][0][1] * pVoxel0px1ny1nz +
+			weights[2][0][1] * pVoxel0px1ny1pz - weights[0][1][1] *
+			pVoxel0px0py1nz + weights[2][1][1] * pVoxel0px0py1pz -
+			weights[0][2][1] * pVoxel0px1py1nz + weights[2][2][1] *
+			pVoxel0px1py1pz - weights[0][0][2] * pVoxel1px1ny1nz +
+			weights[2][0][2] * pVoxel1px1ny1pz - weights[0][1][2] *
+			pVoxel1px0py1nz + weights[2][1][2] * pVoxel1px0py1pz -
+			weights[0][2][2] * pVoxel1px1py1nz + weights[2][2][2] *
+			pVoxel1px1py1pz);
+
+		//Note: The above actually give gradients going from low density to high density.
+		//For our normals we want the the other way around, so we switch the components as we return them.
+		return Vector3DFloat(-xGrad, -yGrad, -zGrad);
+	}
+
+
 	template< typename VolumeType, typename MeshType, typename ControllerType >
 	void extractMarchingCubesMeshCustom(VolumeType* volData, Region region, MeshType* result, ControllerType controller)
 	{		
@@ -166,12 +253,12 @@ namespace PolyVox
 					{
 						auto v111Density = controller.convertToDensity(v111);
 
-						// Performance note: Computing normals is one of the bottlencks in the mesh generation process. The
+						// Performance note: Computing normals is one of the bottlenecks in the mesh generation process. The
 						// central difference approach actually samples the same voxel more than once as we call it on two
-						// adjacent voxels. Perhaps we could expand this and eliminate dupicates in the future. Alternatively, 
+						// adjacent voxels. Perhaps we could expand this and eliminate duplicates in the future. Alternatively, 
 						// we could compute vertex normals from adjacent face normals instead of via central differencing, 
-						// but not for vertices on the edge of the region (as this causes visual discontinities).
-						const Vector3DFloat n000 = computeCentralDifferenceGradient(sampler, controller);
+						// but not for vertices on the edge of the region (as this causes visual discontinuities).
+						const Vector3DFloat n000 = computeSobelGradient(sampler, controller);
 
 						/* Find the vertices where the surface intersects the cube */
 						if ((uEdge & 64) && (uXRegSpace > 0))
@@ -179,13 +266,13 @@ namespace PolyVox
 							sampler.moveNegativeX();
 							typename VolumeType::VoxelType v011 = sampler.getVoxel();
 							auto v011Density = controller.convertToDensity(v011);
-							const float fInterp = static_cast<float>(tThreshold - v011Density) / static_cast<float>(v111Density - v011Density);
+							const float fInterp = controller.interpolateDensity(v011, v111);
 
 							// Compute the position
 							const Vector3DFloat v3dPosition(static_cast<float>(uXRegSpace - 1) + fInterp, static_cast<float>(uYRegSpace), static_cast<float>(uZRegSpace));
 
 							// Compute the normal
-							const Vector3DFloat n100 = computeCentralDifferenceGradient(sampler, controller);
+							const Vector3DFloat n100 = computeSobelGradient(sampler, controller);
 							Vector3DFloat v3dNormal = (n100*fInterp) + (n000*(1 - fInterp));
 
 							// The gradient for a voxel can be zero (e.g. solid voxel surrounded by empty ones) and so
@@ -214,13 +301,13 @@ namespace PolyVox
 							sampler.moveNegativeY();
 							typename VolumeType::VoxelType v101 = sampler.getVoxel();
 							auto v101Density = controller.convertToDensity(v101);
-							const float fInterp = static_cast<float>(tThreshold - v101Density) / static_cast<float>(v111Density - v101Density);
+							const float fInterp = controller.interpolateDensity(v101, v111);
 
 							// Compute the position
 							const Vector3DFloat v3dPosition(static_cast<float>(uXRegSpace), static_cast<float>(uYRegSpace - 1) + fInterp, static_cast<float>(uZRegSpace));
 
 							// Compute the normal
-							const Vector3DFloat n010 = computeCentralDifferenceGradient(sampler, controller);
+							const Vector3DFloat n010 = computeSobelGradient(sampler, controller);
 							Vector3DFloat v3dNormal = (n010*fInterp) + (n000*(1 - fInterp));
 
 							// The gradient for a voxel can be zero (e.g. solid voxel surrounded by empty ones) and so
@@ -249,13 +336,13 @@ namespace PolyVox
 							sampler.moveNegativeZ();
 							typename VolumeType::VoxelType v110 = sampler.getVoxel();
 							auto v110Density = controller.convertToDensity(v110);
-							const float fInterp = static_cast<float>(tThreshold - v110Density) / static_cast<float>(v111Density - v110Density);
+							const float fInterp = controller.interpolateDensity(v110, v111);
 
 							// Compute the position
 							const Vector3DFloat v3dPosition(static_cast<float>(uXRegSpace), static_cast<float>(uYRegSpace), static_cast<float>(uZRegSpace - 1) + fInterp);
 
 							// Compute the normal
-							const Vector3DFloat n001 = computeCentralDifferenceGradient(sampler, controller);
+							const Vector3DFloat n001 = computeSobelGradient(sampler, controller);
 							Vector3DFloat v3dNormal = (n001*fInterp) + (n000*(1 - fInterp));
 
 							// The gradient for a voxel can be zero (e.g. solid voxel surrounded by empty ones) and so

@@ -250,7 +250,7 @@ namespace PolyVox
 			uint16_t m_uXPosInChunk;
 			uint16_t m_uYPosInChunk;
 			uint16_t m_uZPosInChunk;
-			const uint16_t m_uChunkSideLengthMinusOne;
+			uint16_t m_uChunkSideLengthMinusOne;
 		};
 
 		#endif // SWIG

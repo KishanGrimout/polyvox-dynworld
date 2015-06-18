@@ -48,8 +48,13 @@ namespace PolyVox
 			);
 	}
 
+	// This 'sobel' version of gradient estimation provides better (smoother) normals than the central difference version.
+	// Even with the 16-bit normal encoding it does seem to make a difference, so is probably worth keeping. However, there
+	// is no way to call it at the moment beyond modifying the main Marching Cubes function below to call this function
+	// instead of the central difference one. We should provide a way to control the normal generation method, perhaps
+	// including *no* normals incase the user wants to generate them afterwards (e.g. from the mesh).
 	template< typename Sampler, typename ControllerType>
-	Vector3DFloat computeSobelGradient(const Sampler& volIter, ControllerType& controller)
+	Vector3DFloat computeSobelGradient(const typename Sampler& volIter, ControllerType& controller)
 	{
 		static const int weights[3][3][3] = { { { 2, 3, 2 }, { 3, 6, 3 }, { 2, 3, 2 } }, {
 			{ 3, 6, 3 }, { 6, 0, 6 }, { 3, 6, 3 } }, { { 2, 3, 2 }, { 3, 6, 3 }, { 2, 3, 2 } } };
@@ -133,7 +138,6 @@ namespace PolyVox
 		//For our normals we want the the other way around, so we switch the components as we return them.
 		return Vector3DFloat(-xGrad, -yGrad, -zGrad);
 	}
-
 
 	template< typename VolumeType, typename MeshType, typename ControllerType >
 	void extractMarchingCubesMeshCustom(VolumeType* volData, Region region, MeshType* result, ControllerType controller)
@@ -258,7 +262,7 @@ namespace PolyVox
 						// adjacent voxels. Perhaps we could expand this and eliminate duplicates in the future. Alternatively, 
 						// we could compute vertex normals from adjacent face normals instead of via central differencing, 
 						// but not for vertices on the edge of the region (as this causes visual discontinuities).
-						const Vector3DFloat n000 = computeSobelGradient(sampler, controller);
+						const Vector3DFloat n111 = computeSobelGradient(sampler, controller);
 
 						/* Find the vertices where the surface intersects the cube */
 						if ((uEdge & 64) && (uXRegSpace > 0))
@@ -272,8 +276,8 @@ namespace PolyVox
 							const Vector3DFloat v3dPosition(static_cast<float>(uXRegSpace - 1) + fInterp, static_cast<float>(uYRegSpace), static_cast<float>(uZRegSpace));
 
 							// Compute the normal
-							const Vector3DFloat n100 = computeSobelGradient(sampler, controller);
-							Vector3DFloat v3dNormal = (n100*fInterp) + (n000*(1 - fInterp));
+							const Vector3DFloat n011 = computeSobelGradient(sampler, controller);
+							Vector3DFloat v3dNormal = (n111*fInterp) + (n011*(1 - fInterp));
 
 							// The gradient for a voxel can be zero (e.g. solid voxel surrounded by empty ones) and so
 							// the interpolated normal can also be zero (e.g. a grid of alternating solid and empty voxels).
@@ -307,8 +311,8 @@ namespace PolyVox
 							const Vector3DFloat v3dPosition(static_cast<float>(uXRegSpace), static_cast<float>(uYRegSpace - 1) + fInterp, static_cast<float>(uZRegSpace));
 
 							// Compute the normal
-							const Vector3DFloat n010 = computeSobelGradient(sampler, controller);
-							Vector3DFloat v3dNormal = (n010*fInterp) + (n000*(1 - fInterp));
+							const Vector3DFloat n101 = computeSobelGradient(sampler, controller);
+							Vector3DFloat v3dNormal = (n111*fInterp) + (n101*(1 - fInterp));
 
 							// The gradient for a voxel can be zero (e.g. solid voxel surrounded by empty ones) and so
 							// the interpolated normal can also be zero (e.g. a grid of alternating solid and empty voxels).
@@ -342,8 +346,8 @@ namespace PolyVox
 							const Vector3DFloat v3dPosition(static_cast<float>(uXRegSpace), static_cast<float>(uYRegSpace), static_cast<float>(uZRegSpace - 1) + fInterp);
 
 							// Compute the normal
-							const Vector3DFloat n001 = computeSobelGradient(sampler, controller);
-							Vector3DFloat v3dNormal = (n001*fInterp) + (n000*(1 - fInterp));
+							const Vector3DFloat n110 = computeSobelGradient(sampler, controller);
+							Vector3DFloat v3dNormal = (n111*fInterp) + (n110*(1 - fInterp));
 
 							// The gradient for a voxel can be zero (e.g. solid voxel surrounded by empty ones) and so
 							// the interpolated normal can also be zero (e.g. a grid of alternating solid and empty voxels).

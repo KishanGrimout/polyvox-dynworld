@@ -213,4 +213,34 @@ namespace PolyVox
 
 		delete[] pTempBuffer;
 	}
+
+	template <typename VoxelType>
+	typename PagedVolume<VoxelType>::Chunk* PagedVolume<VoxelType>::ChunkCache::getChunkCached(const PagedVolume<VoxelType>* pVolume, int32_t iChunkX, int32_t iChunkY, int32_t iChunkZ) const
+	{
+		if ((m_pVolume == pVolume) &&
+			(iChunkX == m_v3dLastAccessedChunkX) &&
+			(iChunkY == m_v3dLastAccessedChunkY) &&
+			(iChunkZ == m_v3dLastAccessedChunkZ))
+		{
+			return m_pLastAccessedChunk;
+		}
+
+		return nullptr;
+	}
+
+	template <typename VoxelType>
+	void PagedVolume<VoxelType>::ChunkCache::setChunkCached(const PagedVolume<VoxelType>* pVolume, typename PagedVolume<VoxelType>::Chunk* pChunk, int32_t iChunkX, int32_t iChunkY, int32_t iChunkZ)
+	{
+		m_v3dLastAccessedChunkX = iChunkX;
+		m_v3dLastAccessedChunkY = iChunkY;
+		m_v3dLastAccessedChunkZ = iChunkZ;
+		m_pLastAccessedChunk = pChunk;
+		m_pVolume = pVolume;
+	}
+
+	template <typename VoxelType>
+	void PagedVolume<VoxelType>::ChunkCache::dirtyCache()
+	{
+		m_pLastAccessedChunk = nullptr;
+	}
 }

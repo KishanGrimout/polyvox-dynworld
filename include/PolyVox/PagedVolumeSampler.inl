@@ -123,8 +123,9 @@ namespace PolyVox
 
 		uint32_t uVoxelIndexInChunk = morton256_x[m_uXPosInChunk] | morton256_y[m_uYPosInChunk] | morton256_z[m_uZPosInChunk];
 
-		auto pCurrentChunk = this->mVolume->canReuseLastAccessedChunk(uXChunk, uYChunk, uZChunk) ?
-			this->mVolume->m_pLastAccessedChunk : this->mVolume->getChunk(uXChunk, uYChunk, uZChunk);
+		auto pCurrentChunk = this->mVolume->m_tChunkCache.getChunkCached(this->mVolume, uXChunk, uYChunk, uZChunk);
+		if (pCurrentChunk == nullptr)
+			pCurrentChunk = this->mVolume->getChunk(uXChunk, uYChunk, uZChunk);
 
 		mCurrentVoxel = pCurrentChunk->m_tData + uVoxelIndexInChunk;
 	}

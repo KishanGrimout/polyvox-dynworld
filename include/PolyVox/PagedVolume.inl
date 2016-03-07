@@ -123,7 +123,9 @@ namespace PolyVox
 		const uint16_t yOffset = static_cast<uint16_t>(uYPos & m_iChunkMask);
 		const uint16_t zOffset = static_cast<uint16_t>(uZPos & m_iChunkMask);
 
-		auto pChunk = canReuseLastAccessedChunk(chunkX, chunkY, chunkZ) ? m_pLastAccessedChunk : getChunk(chunkX, chunkY, chunkZ);
+		auto pChunk = m_tChunkCache.getChunkCached(this, chunkX, chunkY, chunkZ);
+		if (pChunk == nullptr)
+			pChunk = getChunk(chunkX, chunkY, chunkZ);
 
 		return pChunk->getVoxel(xOffset, yOffset, zOffset);
 	}
@@ -156,7 +158,9 @@ namespace PolyVox
 		const uint16_t yOffset = static_cast<uint16_t>(uYPos - (chunkY << m_uChunkSideLengthPower));
 		const uint16_t zOffset = static_cast<uint16_t>(uZPos - (chunkZ << m_uChunkSideLengthPower));
 
-		auto pChunk = canReuseLastAccessedChunk(chunkX, chunkY, chunkZ) ? m_pLastAccessedChunk : getChunk(chunkX, chunkY, chunkZ);
+		auto pChunk = m_tChunkCache.getChunkCached(this, chunkX, chunkY, chunkZ);
+		if (pChunk == nullptr)
+			pChunk = getChunk(chunkX, chunkY, chunkZ);
 
 		pChunk->setVoxel(xOffset, yOffset, zOffset, tValue);
 	}
@@ -216,8 +220,8 @@ namespace PolyVox
 	template <typename VoxelType>
 	void PagedVolume<VoxelType>::flushAll()
 	{
-		// Clear this pointer as all chunks are about to be removed.
-		m_pLastAccessedChunk = nullptr;
+		// Clear chunk cache as all chunks are about to be removed.
+		m_tChunkCache.dirtyCache();
 
 		// Erase all the most recently used chunks.
 		for (uint32_t uIndex = 0; uIndex < uChunkArraySize; uIndex++)
@@ -232,8 +236,8 @@ namespace PolyVox
 	/*template <typename VoxelType>
 	void PagedVolume<VoxelType>::flush(Region regFlush)
 	{
-		// Clear this pointer in case the chunk it points at is flushed.
-		m_pLastAccessedChunk = nullptr;
+		// Clear chunk cache as all chunks are about to be removed.
+		m_tChunkCache.dirtyCache();
 
 		// Convert the start and end positions into chunk space coordinates
 		Vector3DInt32 v3dStart;
@@ -260,15 +264,6 @@ namespace PolyVox
 			}
 		}
 	}*/
-
-	template <typename VoxelType>
-	bool PagedVolume<VoxelType>::canReuseLastAccessedChunk(int32_t iChunkX, int32_t iChunkY, int32_t iChunkZ) const
-	{
-		return ((iChunkX == m_v3dLastAccessedChunkX) &&
-			(iChunkY == m_v3dLastAccessedChunkY) &&
-			(iChunkZ == m_v3dLastAccessedChunkZ) &&
-			(m_pLastAccessedChunk));
-	}
 
 	template <typename VoxelType>
 	typename PagedVolume<VoxelType>::Chunk* PagedVolume<VoxelType>::getChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const
@@ -364,11 +359,8 @@ namespace PolyVox
 				m_arrayChunks[uOldestChunkIndex] = nullptr;
 			}
 		}
-				
-		m_pLastAccessedChunk = pChunk;
-		m_v3dLastAccessedChunkX = uChunkX;
-		m_v3dLastAccessedChunkY = uChunkY;
-		m_v3dLastAccessedChunkZ = uChunkZ;
+
+		m_tChunkCache.setChunkCached(this, pChunk, uChunkX, uChunkY, uChunkZ);
 
 		return pChunk;	
 	}

@@ -40,6 +40,29 @@ freely, subject to the following restrictions:
 
 namespace PolyVox
 {
+	class DefaultChunkCache
+	{
+	public:
+		template <typename VolumeType>
+		typename VolumeType::Chunk* getChunkCached(const VolumeType* pVolume, int32_t iChunkX, int32_t iChunkY, int32_t iChunkZ) const;
+
+		template <typename VolumeType>
+		void setChunkCached(const VolumeType* pVolume, typename VolumeType::Chunk* pChunk, int32_t iChunkX, int32_t iChunkY, int32_t iChunkZ);
+
+		void dirtyCache();
+
+	private:
+		// Storing these properties individually has proved to be faster than keeping
+		// them in a Vector3DInt32 as it avoids constructions and comparison overheads.
+		// They are also at the start of the class in the hope that they will be pulled
+		// into cache - I've got no idea if this actually makes a difference.
+		int32_t m_v3dLastAccessedChunkX = 0;
+		int32_t m_v3dLastAccessedChunkY = 0;
+		int32_t m_v3dLastAccessedChunkZ = 0;
+		void* m_pLastAccessedChunk = nullptr;
+		void* m_pVolume = nullptr;
+	};
+
 	/// The PagedVolume class provides a memory efficient method of storing voxel data while also allowing fast access and modification.
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	/// A PagedVolume is essentially a 3D array in which each element (or <i>voxel</i>) is identified by a three dimensional (x,y,z) coordinate.
@@ -107,7 +130,7 @@ namespace PolyVox
 	/// This is true even if you are only reading data from the volume, as concurrently reading from different threads can invalidate the contents
 	/// of the chunk cache (amoung other problems).
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType>
+	template <typename VoxelType, typename ChunkCacheType = DefaultChunkCache>
 	class PagedVolume : public BaseVolume<VoxelType>
 	{
 	public:
@@ -162,25 +185,6 @@ namespace PolyVox
 			Vector3DInt32 m_v3dChunkSpacePosition;
 		};
 
-		class ChunkCache
-		{
-		public:
-			typename PagedVolume<VoxelType>::Chunk* getChunkCached(const PagedVolume<VoxelType>* pVolume, int32_t iChunkX, int32_t iChunkY, int32_t iChunkZ) const;
-			void setChunkCached(const PagedVolume<VoxelType>* pVolume, typename PagedVolume<VoxelType>::Chunk* pChunk, int32_t iChunkX, int32_t iChunkY, int32_t iChunkZ);
-			void dirtyCache();
-
-		private:
-			// Storing these properties individually has proved to be faster than keeping
-			// them in a Vector3DInt32 as it avoids constructions and comparison overheads.
-			// They are also at the start of the class in the hope that they will be pulled
-			// into cache - I've got no idea if this actually makes a difference.
-			int32_t m_v3dLastAccessedChunkX = 0;
-			int32_t m_v3dLastAccessedChunkY = 0;
-			int32_t m_v3dLastAccessedChunkZ = 0;
-			typename PagedVolume<VoxelType>::Chunk* m_pLastAccessedChunk = nullptr;
-			const PagedVolume<VoxelType>* m_pVolume = nullptr;
-		};
-
 		/**
 		* Users can override this class and provide an instance of the derived class to the PagedVolume constructor. This derived class
 		* could then perform tasks such as compression and decompression of the data, and read/writing it to a file, database, network,
@@ -204,16 +208,16 @@ namespace PolyVox
 		//option. For now it seems best to 'fix' it with the preprocessor insstead, but maybe the workaround can be reinstated
 		//in the future
 		//typedef Volume<VoxelType> VolumeOfVoxelType; //Workaround for GCC/VS2010 differences.
-		//class Sampler : public VolumeOfVoxelType::template Sampler< PagedVolume<VoxelType> >
+		//class Sampler : public VolumeOfVoxelType::template Sampler< PagedVolume<VoxelType, ChunkCacheType> >
 		#ifndef SWIG
 #if defined(_MSC_VER)
-		class Sampler : public BaseVolume<VoxelType>::Sampler< PagedVolume<VoxelType> > //This line works on VS2010
+		class Sampler : public BaseVolume<VoxelType>::Sampler< PagedVolume<VoxelType, ChunkCacheType> > //This line works on VS2010
 #else
-		class Sampler : public BaseVolume<VoxelType>::template Sampler< PagedVolume<VoxelType> > //This line works on GCC
+		class Sampler : public BaseVolume<VoxelType>::template Sampler< PagedVolume<VoxelTyp, ChunkCacheTypee> > //This line works on GCC
 #endif
 		{
 		public:
-			Sampler(PagedVolume<VoxelType>* volume);
+			Sampler(PagedVolume<VoxelType, ChunkCacheType>* volume);
 			~Sampler();
 
 			/// \deprecated
@@ -310,7 +314,7 @@ namespace PolyVox
 	private:
 		Chunk* getChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const;
 
-		mutable ChunkCache m_tChunkCache;
+		mutable ChunkCacheType m_tChunkCache;
 
 		mutable uint32_t m_uTimestamper = 0;
 
@@ -332,6 +336,8 @@ namespace PolyVox
 		int32_t m_iChunkMask;
 
 		Pager* m_pPager = nullptr;
+
+		typedef PagedVolume<VoxelType, ChunkCacheType> _Myt;
 	};
 
 }

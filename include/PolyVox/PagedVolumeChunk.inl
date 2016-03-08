@@ -26,8 +26,8 @@ freely, subject to the following restrictions:
 
 namespace PolyVox
 {
-	template <typename VoxelType>
-	PagedVolume<VoxelType>::Chunk::Chunk(Vector3DInt32 v3dPosition, uint16_t uSideLength, Pager* pPager)
+	template <typename VoxelType, typename ChunkCacheType>
+	PagedVolume<VoxelType, ChunkCacheType>::Chunk::Chunk(Vector3DInt32 v3dPosition, uint16_t uSideLength, Pager* pPager)
 		:m_uChunkLastAccessed(0)
 		,m_bDataModified(true)
 		,m_tData(0)
@@ -64,8 +64,8 @@ namespace PolyVox
 		m_bDataModified = false;
 	}
 
-	template <typename VoxelType>
-	PagedVolume<VoxelType>::Chunk::~Chunk()
+	template <typename VoxelType, typename ChunkCacheType>
+	PagedVolume<VoxelType, ChunkCacheType>::Chunk::~Chunk()
 	{
 		if (m_pPager)
 		{
@@ -81,20 +81,20 @@ namespace PolyVox
 		m_tData = 0;
 	}
 
-	template <typename VoxelType>
-	VoxelType* PagedVolume<VoxelType>::Chunk::getData(void) const
+	template <typename VoxelType, typename ChunkCacheType>
+	VoxelType* PagedVolume<VoxelType, ChunkCacheType>::Chunk::getData(void) const
 	{
 		return m_tData;
 	}
 
-	template <typename VoxelType>
-	uint32_t PagedVolume<VoxelType>::Chunk::getDataSizeInBytes(void) const
+	template <typename VoxelType, typename ChunkCacheType>
+	uint32_t PagedVolume<VoxelType, ChunkCacheType>::Chunk::getDataSizeInBytes(void) const
 	{
 		return m_uSideLength * m_uSideLength * m_uSideLength * sizeof(VoxelType);
 	}
 
-	template <typename VoxelType>
-	VoxelType PagedVolume<VoxelType>::Chunk::getVoxel(uint32_t uXPos, uint32_t uYPos, uint32_t uZPos) const
+	template <typename VoxelType, typename ChunkCacheType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Chunk::getVoxel(uint32_t uXPos, uint32_t uYPos, uint32_t uZPos) const
 	{
 		// This code is not usually expected to be called by the user, with the exception of when implementing paging 
 		// of uncompressed data. It's a performance critical code path so we use asserts rather than exceptions.
@@ -108,14 +108,14 @@ namespace PolyVox
 		return m_tData[index];
 	}
 
-	template <typename VoxelType>
-	VoxelType PagedVolume<VoxelType>::Chunk::getVoxel(const Vector3DUint16& v3dPos) const
+	template <typename VoxelType, typename ChunkCacheType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Chunk::getVoxel(const Vector3DUint16& v3dPos) const
 	{
 		return getVoxel(v3dPos.getX(), v3dPos.getY(), v3dPos.getZ());
 	}
 
-	template <typename VoxelType>
-	void PagedVolume<VoxelType>::Chunk::setVoxel(uint32_t uXPos, uint32_t uYPos, uint32_t uZPos, VoxelType tValue)
+	template <typename VoxelType, typename ChunkCacheType>
+	void PagedVolume<VoxelType, ChunkCacheType>::Chunk::setVoxel(uint32_t uXPos, uint32_t uYPos, uint32_t uZPos, VoxelType tValue)
 	{
 		// This code is not usually expected to be called by the user, with the exception of when implementing paging 
 		// of uncompressed data. It's a performance critical code path so we use asserts rather than exceptions.
@@ -131,21 +131,21 @@ namespace PolyVox
 		this->m_bDataModified = true;
 	}
 
-	template <typename VoxelType>
-	void PagedVolume<VoxelType>::Chunk::setVoxel(const Vector3DUint16& v3dPos, VoxelType tValue)
+	template <typename VoxelType, typename ChunkCacheType>
+	void PagedVolume<VoxelType, ChunkCacheType>::Chunk::setVoxel(const Vector3DUint16& v3dPos, VoxelType tValue)
     {
 		setVoxel(v3dPos.getX(), v3dPos.getY(), v3dPos.getZ(), tValue);
     }
 
-	template <typename VoxelType>
-	uint32_t PagedVolume<VoxelType>::Chunk::calculateSizeInBytes(void)
+	template <typename VoxelType, typename ChunkCacheType>
+	uint32_t PagedVolume<VoxelType, ChunkCacheType>::Chunk::calculateSizeInBytes(void)
 	{
 		// Call through to the static version
 		return calculateSizeInBytes(m_uSideLength);
 	}
 
-	template <typename VoxelType>
-	uint32_t PagedVolume<VoxelType>::Chunk::calculateSizeInBytes(uint32_t uSideLength)
+	template <typename VoxelType, typename ChunkCacheType>
+	uint32_t PagedVolume<VoxelType, ChunkCacheType>::Chunk::calculateSizeInBytes(uint32_t uSideLength)
 	{
 		// Note: We disregard the size of the other class members as they are likely to be very small compared to the size of the
 		// allocated voxel data. This also keeps the reported size as a power of two, which makes other memory calculations easier.
@@ -157,8 +157,8 @@ namespace PolyVox
 	// use Morton encoding. Users who still have data in linear order (on disk, in databases, etc) will need to call this function
 	// if they load the data in by memcpy()ing it via the raw pointer. On the other hand, if they set the data using setVoxel()
 	// then the ordering is automatically handled correctly. 
-	template <typename VoxelType>
-	void PagedVolume<VoxelType>::Chunk::changeLinearOrderingToMorton(void)
+	template <typename VoxelType, typename ChunkCacheType>
+	void PagedVolume<VoxelType, ChunkCacheType>::Chunk::changeLinearOrderingToMorton(void)
 	{		
 		VoxelType* pTempBuffer = new VoxelType[m_uSideLength * m_uSideLength * m_uSideLength];
 
@@ -192,8 +192,8 @@ namespace PolyVox
 
 	// Like the above function, this is provided fot easing backwards compatibility. In Cubiquity we have some
 	// old databases which use linear ordering, and we need to continue to save such data in linear order.
-	template <typename VoxelType>
-	void PagedVolume<VoxelType>::Chunk::changeMortonOrderingToLinear(void)
+	template <typename VoxelType, typename ChunkCacheType>
+	void PagedVolume<VoxelType, ChunkCacheType>::Chunk::changeMortonOrderingToLinear(void)
 	{
 		VoxelType* pTempBuffer = new VoxelType[m_uSideLength * m_uSideLength * m_uSideLength];
 		for (uint16_t z = 0; z < m_uSideLength; z++)
@@ -214,22 +214,23 @@ namespace PolyVox
 		delete[] pTempBuffer;
 	}
 
-	template <typename VoxelType>
-	typename PagedVolume<VoxelType>::Chunk* PagedVolume<VoxelType>::ChunkCache::getChunkCached(const PagedVolume<VoxelType>* pVolume, int32_t iChunkX, int32_t iChunkY, int32_t iChunkZ) const
+	template <typename VolumeType>
+	typename VolumeType::Chunk* DefaultChunkCache::getChunkCached(const VolumeType* pVolume, int32_t iChunkX, int32_t iChunkY, int32_t iChunkZ) const
 	{
-		if ((m_pVolume == pVolume) &&
+		if ((m_pLastAccessedChunk != nullptr) &&
+			(m_pVolume == pVolume) &&
 			(iChunkX == m_v3dLastAccessedChunkX) &&
 			(iChunkY == m_v3dLastAccessedChunkY) &&
 			(iChunkZ == m_v3dLastAccessedChunkZ))
 		{
-			return m_pLastAccessedChunk;
+			return static_cast<typename VolumeType::Chunk*>(m_pLastAccessedChunk);
 		}
 
 		return nullptr;
 	}
 
-	template <typename VoxelType>
-	void PagedVolume<VoxelType>::ChunkCache::setChunkCached(const PagedVolume<VoxelType>* pVolume, typename PagedVolume<VoxelType>::Chunk* pChunk, int32_t iChunkX, int32_t iChunkY, int32_t iChunkZ)
+	template <typename VolumeType>
+	void DefaultChunkCache::setChunkCached(const VolumeType* pVolume, typename VolumeType::Chunk* pChunk, int32_t iChunkX, int32_t iChunkY, int32_t iChunkZ)
 	{
 		m_v3dLastAccessedChunkX = iChunkX;
 		m_v3dLastAccessedChunkY = iChunkY;
@@ -238,8 +239,7 @@ namespace PolyVox
 		m_pVolume = pVolume;
 	}
 
-	template <typename VoxelType>
-	void PagedVolume<VoxelType>::ChunkCache::dirtyCache()
+	void DefaultChunkCache::dirtyCache()
 	{
 		m_pLastAccessedChunk = nullptr;
 	}

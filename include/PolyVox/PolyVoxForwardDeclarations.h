@@ -133,11 +133,12 @@ namespace PolyVox
 	////////////////////////////////////////////////////////////////////////////////
 	// PagedVolume
 	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType> class PagedVolume;
+	class DefaultChunkCache;
+	template <typename VoxelType, typename ChunkCacheType> class PagedVolume;
 	template <typename VoxelType>
-	using LargeVolume = PagedVolume<VoxelType>;
+	using LargeVolume = PagedVolume<VoxelType, DefaultChunkCache>;
 	template <typename VoxelType>
-	using SimpleVolume = PagedVolume<VoxelType>;
+	using SimpleVolume = PagedVolume<VoxelType, DefaultChunkCache>;
 
 	////////////////////////////////////////////////////////////////////////////////
 	// Pager

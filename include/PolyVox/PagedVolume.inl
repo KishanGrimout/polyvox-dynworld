@@ -34,8 +34,8 @@ namespace PolyVox
 	/// \param uTargetMemoryUsageInBytes The upper limit to how much memory this PagedVolume should aim to use.
 	/// \param uChunkSideLength The size of the chunks making up the volume. Small chunks will compress/decompress faster, but there will also be more of them meaning voxel access could be slower.
 	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType>
-	PagedVolume<VoxelType>::PagedVolume(Pager* pPager,	uint32_t uTargetMemoryUsageInBytes,	uint16_t uChunkSideLength)
+	template <typename VoxelType, typename ChunkCacheType>
+	PagedVolume<VoxelType, ChunkCacheType>::PagedVolume(Pager* pPager,	uint32_t uTargetMemoryUsageInBytes,	uint16_t uChunkSideLength)
 		:BaseVolume<VoxelType>()
 		, m_uChunkSideLength(uChunkSideLength)
 		, m_pPager(pPager)
@@ -53,7 +53,7 @@ namespace PolyVox
 		m_iChunkMask = m_uChunkSideLength - 1;
 
 		// Calculate the number of chunks based on the memory limit and the size of each chunk.
-		uint32_t uChunkSizeInBytes = PagedVolume<VoxelType>::Chunk::calculateSizeInBytes(m_uChunkSideLength);
+		uint32_t uChunkSizeInBytes = PagedVolume<VoxelType, ChunkCacheType>::Chunk::calculateSizeInBytes(m_uChunkSideLength);
 		m_uChunkCountLimit = uTargetMemoryUsageInBytes / uChunkSizeInBytes;
 
 		// Enforce sensible limits on the number of chunks.
@@ -76,8 +76,8 @@ namespace PolyVox
 	///
 	/// \sa VolumeResampler
 	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType>
-	PagedVolume<VoxelType>::PagedVolume(const PagedVolume<VoxelType>& /*rhs*/)
+	template <typename VoxelType, typename ChunkCacheType>
+	PagedVolume<VoxelType, ChunkCacheType>::PagedVolume(const PagedVolume<VoxelType, ChunkCacheType>& /*rhs*/)
 	{
 		POLYVOX_THROW(not_implemented, "Volume copy constructor not implemented to prevent accidental copying.");
 	}
@@ -85,8 +85,8 @@ namespace PolyVox
 	////////////////////////////////////////////////////////////////////////////////
 	/// Destroys the volume The destructor will call flushAll() to ensure that a paging volume has the chance to save it's data via the dataOverflowHandler() if desired.
 	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType>
-	PagedVolume<VoxelType>::~PagedVolume()
+	template <typename VoxelType, typename ChunkCacheType>
+	PagedVolume<VoxelType, ChunkCacheType>::~PagedVolume()
 	{
 		flushAll();
 	}
@@ -98,8 +98,8 @@ namespace PolyVox
 	///
 	/// \sa VolumeResampler
 	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType>
-	PagedVolume<VoxelType>& PagedVolume<VoxelType>::operator=(const PagedVolume<VoxelType>& /*rhs*/)
+	template <typename VoxelType, typename ChunkCacheType>
+	PagedVolume<VoxelType, ChunkCacheType>& PagedVolume<VoxelType, ChunkCacheType>::operator=(const PagedVolume<VoxelType, ChunkCacheType>& /*rhs*/)
 	{
 		POLYVOX_THROW(not_implemented, "Volume assignment operator not implemented to prevent accidental copying.");
 	}
@@ -112,8 +112,8 @@ namespace PolyVox
 	/// \param uZPos The \c z position of the voxel
 	/// \return The voxel value
 	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType>
-	VoxelType PagedVolume<VoxelType>::getVoxel(int32_t uXPos, int32_t uYPos, int32_t uZPos) const
+	template <typename VoxelType, typename ChunkCacheType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType>::getVoxel(int32_t uXPos, int32_t uYPos, int32_t uZPos) const
 	{
 		const int32_t chunkX = uXPos >> m_uChunkSideLengthPower;
 		const int32_t chunkY = uYPos >> m_uChunkSideLengthPower;
@@ -123,7 +123,7 @@ namespace PolyVox
 		const uint16_t yOffset = static_cast<uint16_t>(uYPos & m_iChunkMask);
 		const uint16_t zOffset = static_cast<uint16_t>(uZPos & m_iChunkMask);
 
-		auto pChunk = m_tChunkCache.getChunkCached(this, chunkX, chunkY, chunkZ);
+		auto pChunk = m_tChunkCache.getChunkCached<_Myt>(this, chunkX, chunkY, chunkZ);
 		if (pChunk == nullptr)
 			pChunk = getChunk(chunkX, chunkY, chunkZ);
 
@@ -136,8 +136,8 @@ namespace PolyVox
 	/// \param v3dPos The 3D position of the voxel
 	/// \return The voxel value
 	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType>
-	VoxelType PagedVolume<VoxelType>::getVoxel(const Vector3DInt32& v3dPos) const
+	template <typename VoxelType, typename ChunkCacheType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType>::getVoxel(const Vector3DInt32& v3dPos) const
 	{
 		return getVoxel(v3dPos.getX(), v3dPos.getY(), v3dPos.getZ());
 	}
@@ -147,8 +147,8 @@ namespace PolyVox
 	/// \param uYPos the \c y position of the voxel
 	/// \param uZPos the \c z position of the voxel
 	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType>
-	void PagedVolume<VoxelType>::setVoxel(int32_t uXPos, int32_t uYPos, int32_t uZPos, VoxelType tValue)
+	template <typename VoxelType, typename ChunkCacheType>
+	void PagedVolume<VoxelType, ChunkCacheType>::setVoxel(int32_t uXPos, int32_t uYPos, int32_t uZPos, VoxelType tValue)
 	{
 		const int32_t chunkX = uXPos >> m_uChunkSideLengthPower;
 		const int32_t chunkY = uYPos >> m_uChunkSideLengthPower;
@@ -158,7 +158,7 @@ namespace PolyVox
 		const uint16_t yOffset = static_cast<uint16_t>(uYPos - (chunkY << m_uChunkSideLengthPower));
 		const uint16_t zOffset = static_cast<uint16_t>(uZPos - (chunkZ << m_uChunkSideLengthPower));
 
-		auto pChunk = m_tChunkCache.getChunkCached(this, chunkX, chunkY, chunkZ);
+		auto pChunk = m_tChunkCache.getChunkCached<_Myt>(this, chunkX, chunkY, chunkZ);
 		if (pChunk == nullptr)
 			pChunk = getChunk(chunkX, chunkY, chunkZ);
 
@@ -169,8 +169,8 @@ namespace PolyVox
 	/// \param v3dPos the 3D position of the voxel
 	/// \param tValue the value to which the voxel will be set
 	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType>
-	void PagedVolume<VoxelType>::setVoxel(const Vector3DInt32& v3dPos, VoxelType tValue)
+	template <typename VoxelType, typename ChunkCacheType>
+	void PagedVolume<VoxelType, ChunkCacheType>::setVoxel(const Vector3DInt32& v3dPos, VoxelType tValue)
 	{
 		setVoxel(v3dPos.getX(), v3dPos.getY(), v3dPos.getZ(), tValue);
 	}
@@ -179,8 +179,8 @@ namespace PolyVox
 	/// Note that if the memory usage limit is not large enough to support the region this function will only load part of the region. In this case it is undefined which parts will actually be loaded. If all the voxels in the given region are already loaded, this function will not do anything. Other voxels might be unloaded to make space for the new voxels.
 	/// \param regPrefetch The Region of voxels to prefetch into memory.
 	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType>
-	void PagedVolume<VoxelType>::prefetch(Region regPrefetch)
+	template <typename VoxelType, typename ChunkCacheType>
+	void PagedVolume<VoxelType, ChunkCacheType>::prefetch(Region regPrefetch)
 	{
 		// Convert the start and end positions into chunk space coordinates
 		Vector3DInt32 v3dStart;
@@ -217,8 +217,8 @@ namespace PolyVox
 	////////////////////////////////////////////////////////////////////////////////
 	/// Removes all voxels from memory, and calls dataOverflowHandler() to ensure the application has a chance to store the data.
 	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType>
-	void PagedVolume<VoxelType>::flushAll()
+	template <typename VoxelType, typename ChunkCacheType>
+	void PagedVolume<VoxelType, ChunkCacheType>::flushAll()
 	{
 		// Clear chunk cache as all chunks are about to be removed.
 		m_tChunkCache.dirtyCache();
@@ -233,8 +233,8 @@ namespace PolyVox
 	////////////////////////////////////////////////////////////////////////////////
 	/// Removes all voxels in the specified Region from memory, and calls dataOverflowHandler() to ensure the application has a chance to store the data. It is possible that there are no voxels loaded in the Region, in which case the function will have no effect.
 	////////////////////////////////////////////////////////////////////////////////
-	/*template <typename VoxelType>
-	void PagedVolume<VoxelType>::flush(Region regFlush)
+	/*template <typename VoxelType, typename ChunkCacheType>
+	void PagedVolume<VoxelType, ChunkCacheType>::flush(Region regFlush)
 	{
 		// Clear chunk cache as all chunks are about to be removed.
 		m_tChunkCache.dirtyCache();
@@ -265,8 +265,8 @@ namespace PolyVox
 		}
 	}*/
 
-	template <typename VoxelType>
-	typename PagedVolume<VoxelType>::Chunk* PagedVolume<VoxelType>::getChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const
+	template <typename VoxelType, typename ChunkCacheType>
+	typename PagedVolume<VoxelType, ChunkCacheType>::Chunk* PagedVolume<VoxelType, ChunkCacheType>::getChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const
 	{
 		Chunk* pChunk = nullptr;
 
@@ -307,7 +307,7 @@ namespace PolyVox
 		{
 			// The chunk was not found so we will create a new one.
 			Vector3DInt32 v3dChunkPos(uChunkX, uChunkY, uChunkZ);
-			pChunk = new PagedVolume<VoxelType>::Chunk(v3dChunkPos, m_uChunkSideLength, m_pPager);
+			pChunk = new PagedVolume<VoxelType, ChunkCacheType>::Chunk(v3dChunkPos, m_uChunkSideLength, m_pPager);
 			pChunk->m_uChunkLastAccessed = ++m_uTimestamper; // Important, as we may soon delete the oldest chunk
 
 			// Store the chunk at the appropriate place in out chunk array. Ideally this place is
@@ -360,7 +360,7 @@ namespace PolyVox
 			}
 		}
 
-		m_tChunkCache.setChunkCached(this, pChunk, uChunkX, uChunkY, uChunkZ);
+		m_tChunkCache.setChunkCached<_Myt>(this, pChunk, uChunkX, uChunkY, uChunkZ);
 
 		return pChunk;	
 	}
@@ -368,8 +368,8 @@ namespace PolyVox
 	////////////////////////////////////////////////////////////////////////////////
 	/// Calculate the memory usage of the volume.
 	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType>
-	uint32_t PagedVolume<VoxelType>::calculateSizeInBytes(void)
+	template <typename VoxelType, typename ChunkCacheType>
+	uint32_t PagedVolume<VoxelType, ChunkCacheType>::calculateSizeInBytes(void)
 	{
 		uint32_t uChunkCount = 0;
 		for (uint32_t uIndex = 0; uIndex < uChunkArraySize; uIndex++)
@@ -382,7 +382,7 @@ namespace PolyVox
 
 		// Note: We disregard the size of the other class members as they are likely to be very small compared to the size of the
 		// allocated voxel data. This also keeps the reported size as a power of two, which makes other memory calculations easier.
-		return PagedVolume<VoxelType>::Chunk::calculateSizeInBytes(m_uChunkSideLength) * uChunkCount;
+		return PagedVolume<VoxelType, ChunkCacheType>::Chunk::calculateSizeInBytes(m_uChunkSideLength) * uChunkCount;
 	}
 }
 

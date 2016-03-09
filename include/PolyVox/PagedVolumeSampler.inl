@@ -1,24 +1,25 @@
 /*******************************************************************************
-Copyright (c) 2005-2009 David Williams
-
-This software is provided 'as-is', without any express or implied
-warranty. In no event will the authors be held liable for any damages
-arising from the use of this software.
-
-Permission is granted to anyone to use this software for any purpose,
-including commercial applications, and to alter it and redistribute it
-freely, subject to the following restrictions:
-
-    1. The origin of this software must not be misrepresented; you must not
-    claim that you wrote the original software. If you use this software
-    in a product, an acknowledgment in the product documentation would be
-    appreciated but is not required.
-
-    2. Altered source versions must be plainly marked as such, and must not be
-    misrepresented as being the original software.
-
-    3. This notice may not be removed or altered from any source
-    distribution. 	
+* The MIT License (MIT)
+*
+* Copyright (c) 2015 David Williams and Matthew Williams
+*
+* Permission is hereby granted, free of charge, to any person obtaining a copy
+* of this software and associated documentation files (the "Software"), to deal
+* in the Software without restriction, including without limitation the rights
+* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+* copies of the Software, and to permit persons to whom the Software is
+* furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in all
+* copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
 *******************************************************************************/
 
 #include <array>
@@ -54,44 +55,6 @@ namespace PolyVox
 	template <typename VoxelType, typename ChunkCacheType>
 	PagedVolume<VoxelType, ChunkCacheType>::Sampler::~Sampler()
 	{
-	}
-
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Sampler::getSubSampledVoxel(uint8_t uLevel) const
-	{		
-		if(uLevel == 0)
-		{
-			return getVoxel();
-		}
-		else if(uLevel == 1)
-		{
-			VoxelType tValue = getVoxel();
-			tValue = (std::min)(tValue, peekVoxel1px0py0pz());
-			tValue = (std::min)(tValue, peekVoxel0px1py0pz());
-			tValue = (std::min)(tValue, peekVoxel1px1py0pz());
-			tValue = (std::min)(tValue, peekVoxel0px0py1pz());
-			tValue = (std::min)(tValue, peekVoxel1px0py1pz());
-			tValue = (std::min)(tValue, peekVoxel0px1py1pz());
-			tValue = (std::min)(tValue, peekVoxel1px1py1pz());
-			return tValue;
-		}
-		else
-		{
-			const uint8_t uSize = 1 << uLevel;
-
-			VoxelType tValue = (std::numeric_limits<VoxelType>::max)();
-			for(uint8_t z = 0; z < uSize; ++z)
-			{
-				for(uint8_t y = 0; y < uSize; ++y)
-				{
-					for(uint8_t x = 0; x < uSize; ++x)
-					{
-						tValue = (std::min)(tValue, this->mVolume->getVoxel(this->mXPosInVolume + x, this->mYPosInVolume + y, this->mZPosInVolume + z));
-					}
-				}
-			}
-			return tValue;
-		}
 	}
 
 	template <typename VoxelType, typename ChunkCacheType>
@@ -145,7 +108,7 @@ namespace PolyVox
 		BaseVolume<VoxelType>::template Sampler< PagedVolume<VoxelType, ChunkCacheType> >::movePositiveX();
 
 		// Then we update the voxel pointer
-		if(CAN_GO_POS_X(this->m_uXPosInChunk))
+		if (CAN_GO_POS_X(this->m_uXPosInChunk))
 		{
 			//No need to compute new chunk.
 			mCurrentVoxel += POS_X_DELTA;
@@ -265,7 +228,7 @@ namespace PolyVox
 		{
 			return *(mCurrentVoxel + NEG_X_DELTA + NEG_Y_DELTA + NEG_Z_DELTA);
 		}
-		return this->mVolume->getVoxel(this->mXPosInVolume-1,this->mYPosInVolume-1,this->mZPosInVolume-1);
+		return this->mVolume->getVoxel(this->mXPosInVolume - 1, this->mYPosInVolume - 1, this->mZPosInVolume - 1);
 	}
 
 	template <typename VoxelType, typename ChunkCacheType>
@@ -275,7 +238,7 @@ namespace PolyVox
 		{
 			return *(mCurrentVoxel + NEG_X_DELTA + NEG_Y_DELTA);
 		}
-		return this->mVolume->getVoxel(this->mXPosInVolume-1,this->mYPosInVolume-1,this->mZPosInVolume);
+		return this->mVolume->getVoxel(this->mXPosInVolume - 1, this->mYPosInVolume - 1, this->mZPosInVolume);
 	}
 
 	template <typename VoxelType, typename ChunkCacheType>
@@ -285,7 +248,7 @@ namespace PolyVox
 		{
 			return *(mCurrentVoxel + NEG_X_DELTA + NEG_Y_DELTA + POS_Z_DELTA);
 		}
-		return this->mVolume->getVoxel(this->mXPosInVolume-1,this->mYPosInVolume-1,this->mZPosInVolume+1);
+		return this->mVolume->getVoxel(this->mXPosInVolume - 1, this->mYPosInVolume - 1, this->mZPosInVolume + 1);
 	}
 
 	template <typename VoxelType, typename ChunkCacheType>
@@ -295,7 +258,7 @@ namespace PolyVox
 		{
 			return *(mCurrentVoxel + NEG_X_DELTA + NEG_Z_DELTA);
 		}
-		return this->mVolume->getVoxel(this->mXPosInVolume-1,this->mYPosInVolume,this->mZPosInVolume-1);
+		return this->mVolume->getVoxel(this->mXPosInVolume - 1, this->mYPosInVolume, this->mZPosInVolume - 1);
 	}
 
 	template <typename VoxelType, typename ChunkCacheType>
@@ -305,7 +268,7 @@ namespace PolyVox
 		{
 			return *(mCurrentVoxel + NEG_X_DELTA);
 		}
-		return this->mVolume->getVoxel(this->mXPosInVolume-1,this->mYPosInVolume,this->mZPosInVolume);
+		return this->mVolume->getVoxel(this->mXPosInVolume - 1, this->mYPosInVolume, this->mZPosInVolume);
 	}
 
 	template <typename VoxelType, typename ChunkCacheType>
@@ -315,7 +278,7 @@ namespace PolyVox
 		{
 			return *(mCurrentVoxel + NEG_X_DELTA + POS_Z_DELTA);
 		}
-		return this->mVolume->getVoxel(this->mXPosInVolume-1,this->mYPosInVolume,this->mZPosInVolume+1);
+		return this->mVolume->getVoxel(this->mXPosInVolume - 1, this->mYPosInVolume, this->mZPosInVolume + 1);
 	}
 
 	template <typename VoxelType, typename ChunkCacheType>
@@ -325,7 +288,7 @@ namespace PolyVox
 		{
 			return *(mCurrentVoxel + NEG_X_DELTA + POS_Y_DELTA + NEG_Z_DELTA);
 		}
-		return this->mVolume->getVoxel(this->mXPosInVolume-1,this->mYPosInVolume+1,this->mZPosInVolume-1);
+		return this->mVolume->getVoxel(this->mXPosInVolume - 1, this->mYPosInVolume + 1, this->mZPosInVolume - 1);
 	}
 
 	template <typename VoxelType, typename ChunkCacheType>
@@ -335,7 +298,7 @@ namespace PolyVox
 		{
 			return *(mCurrentVoxel + NEG_X_DELTA + POS_Y_DELTA);
 		}
-		return this->mVolume->getVoxel(this->mXPosInVolume-1,this->mYPosInVolume+1,this->mZPosInVolume);
+		return this->mVolume->getVoxel(this->mXPosInVolume - 1, this->mYPosInVolume + 1, this->mZPosInVolume);
 	}
 
 	template <typename VoxelType, typename ChunkCacheType>
@@ -345,7 +308,7 @@ namespace PolyVox
 		{
 			return *(mCurrentVoxel + NEG_X_DELTA + POS_Y_DELTA + POS_Z_DELTA);
 		}
-		return this->mVolume->getVoxel(this->mXPosInVolume-1,this->mYPosInVolume+1,this->mZPosInVolume+1);
+		return this->mVolume->getVoxel(this->mXPosInVolume - 1, this->mYPosInVolume + 1, this->mZPosInVolume + 1);
 	}
 
 	//////////////////////////////////////////////////////////////////////////
@@ -357,7 +320,7 @@ namespace PolyVox
 		{
 			return *(mCurrentVoxel + NEG_Y_DELTA + NEG_Z_DELTA);
 		}
-		return this->mVolume->getVoxel(this->mXPosInVolume,this->mYPosInVolume-1,this->mZPosInVolume-1);
+		return this->mVolume->getVoxel(this->mXPosInVolume, this->mYPosInVolume - 1, this->mZPosInVolume - 1);
 	}
 
 	template <typename VoxelType, typename ChunkCacheType>
@@ -367,7 +330,7 @@ namespace PolyVox
 		{
 			return *(mCurrentVoxel + NEG_Y_DELTA);
 		}
-		return this->mVolume->getVoxel(this->mXPosInVolume,this->mYPosInVolume-1,this->mZPosInVolume);
+		return this->mVolume->getVoxel(this->mXPosInVolume, this->mYPosInVolume - 1, this->mZPosInVolume);
 	}
 
 	template <typename VoxelType, typename ChunkCacheType>
@@ -377,7 +340,7 @@ namespace PolyVox
 		{
 			return *(mCurrentVoxel + NEG_Y_DELTA + POS_Z_DELTA);
 		}
-		return this->mVolume->getVoxel(this->mXPosInVolume,this->mYPosInVolume-1,this->mZPosInVolume+1);
+		return this->mVolume->getVoxel(this->mXPosInVolume, this->mYPosInVolume - 1, this->mZPosInVolume + 1);
 	}
 
 	template <typename VoxelType, typename ChunkCacheType>
@@ -387,7 +350,7 @@ namespace PolyVox
 		{
 			return *(mCurrentVoxel + NEG_Z_DELTA);
 		}
-		return this->mVolume->getVoxel(this->mXPosInVolume,this->mYPosInVolume,this->mZPosInVolume-1);
+		return this->mVolume->getVoxel(this->mXPosInVolume, this->mYPosInVolume, this->mZPosInVolume - 1);
 	}
 
 	template <typename VoxelType, typename ChunkCacheType>
@@ -403,7 +366,7 @@ namespace PolyVox
 		{
 			return *(mCurrentVoxel + POS_Z_DELTA);
 		}
-		return this->mVolume->getVoxel(this->mXPosInVolume,this->mYPosInVolume,this->mZPosInVolume+1);
+		return this->mVolume->getVoxel(this->mXPosInVolume, this->mYPosInVolume, this->mZPosInVolume + 1);
 	}
 
 	template <typename VoxelType, typename ChunkCacheType>
@@ -413,7 +376,7 @@ namespace PolyVox
 		{
 			return *(mCurrentVoxel + POS_Y_DELTA + NEG_Z_DELTA);
 		}
-		return this->mVolume->getVoxel(this->mXPosInVolume,this->mYPosInVolume+1,this->mZPosInVolume-1);
+		return this->mVolume->getVoxel(this->mXPosInVolume, this->mYPosInVolume + 1, this->mZPosInVolume - 1);
 	}
 
 	template <typename VoxelType, typename ChunkCacheType>
@@ -423,7 +386,7 @@ namespace PolyVox
 		{
 			return *(mCurrentVoxel + POS_Y_DELTA);
 		}
-		return this->mVolume->getVoxel(this->mXPosInVolume,this->mYPosInVolume+1,this->mZPosInVolume);
+		return this->mVolume->getVoxel(this->mXPosInVolume, this->mYPosInVolume + 1, this->mZPosInVolume);
 	}
 
 	template <typename VoxelType, typename ChunkCacheType>
@@ -433,7 +396,7 @@ namespace PolyVox
 		{
 			return *(mCurrentVoxel + POS_Y_DELTA + POS_Z_DELTA);
 		}
-		return this->mVolume->getVoxel(this->mXPosInVolume,this->mYPosInVolume+1,this->mZPosInVolume+1);
+		return this->mVolume->getVoxel(this->mXPosInVolume, this->mYPosInVolume + 1, this->mZPosInVolume + 1);
 	}
 
 	//////////////////////////////////////////////////////////////////////////
@@ -445,7 +408,7 @@ namespace PolyVox
 		{
 			return *(mCurrentVoxel + POS_X_DELTA + NEG_Y_DELTA + NEG_Z_DELTA);
 		}
-		return this->mVolume->getVoxel(this->mXPosInVolume+1,this->mYPosInVolume-1,this->mZPosInVolume-1);
+		return this->mVolume->getVoxel(this->mXPosInVolume + 1, this->mYPosInVolume - 1, this->mZPosInVolume - 1);
 	}
 
 	template <typename VoxelType, typename ChunkCacheType>
@@ -455,7 +418,7 @@ namespace PolyVox
 		{
 			return *(mCurrentVoxel + POS_X_DELTA + NEG_Y_DELTA);
 		}
-		return this->mVolume->getVoxel(this->mXPosInVolume+1,this->mYPosInVolume-1,this->mZPosInVolume);
+		return this->mVolume->getVoxel(this->mXPosInVolume + 1, this->mYPosInVolume - 1, this->mZPosInVolume);
 	}
 
 	template <typename VoxelType, typename ChunkCacheType>
@@ -465,7 +428,7 @@ namespace PolyVox
 		{
 			return *(mCurrentVoxel + POS_X_DELTA + NEG_Y_DELTA + POS_Z_DELTA);
 		}
-		return this->mVolume->getVoxel(this->mXPosInVolume+1,this->mYPosInVolume-1,this->mZPosInVolume+1);
+		return this->mVolume->getVoxel(this->mXPosInVolume + 1, this->mYPosInVolume - 1, this->mZPosInVolume + 1);
 	}
 
 	template <typename VoxelType, typename ChunkCacheType>
@@ -475,7 +438,7 @@ namespace PolyVox
 		{
 			return *(mCurrentVoxel + POS_X_DELTA + NEG_Z_DELTA);
 		}
-		return this->mVolume->getVoxel(this->mXPosInVolume+1,this->mYPosInVolume,this->mZPosInVolume-1);
+		return this->mVolume->getVoxel(this->mXPosInVolume + 1, this->mYPosInVolume, this->mZPosInVolume - 1);
 	}
 
 	template <typename VoxelType, typename ChunkCacheType>
@@ -485,7 +448,7 @@ namespace PolyVox
 		{
 			return *(mCurrentVoxel + POS_X_DELTA);
 		}
-		return this->mVolume->getVoxel(this->mXPosInVolume+1,this->mYPosInVolume,this->mZPosInVolume);
+		return this->mVolume->getVoxel(this->mXPosInVolume + 1, this->mYPosInVolume, this->mZPosInVolume);
 	}
 
 	template <typename VoxelType, typename ChunkCacheType>
@@ -495,7 +458,7 @@ namespace PolyVox
 		{
 			return *(mCurrentVoxel + POS_X_DELTA + POS_Z_DELTA);
 		}
-		return this->mVolume->getVoxel(this->mXPosInVolume+1,this->mYPosInVolume,this->mZPosInVolume+1);
+		return this->mVolume->getVoxel(this->mXPosInVolume + 1, this->mYPosInVolume, this->mZPosInVolume + 1);
 	}
 
 	template <typename VoxelType, typename ChunkCacheType>
@@ -505,7 +468,7 @@ namespace PolyVox
 		{
 			return *(mCurrentVoxel + POS_X_DELTA + POS_Y_DELTA + NEG_Z_DELTA);
 		}
-		return this->mVolume->getVoxel(this->mXPosInVolume+1,this->mYPosInVolume+1,this->mZPosInVolume-1);
+		return this->mVolume->getVoxel(this->mXPosInVolume + 1, this->mYPosInVolume + 1, this->mZPosInVolume - 1);
 	}
 
 	template <typename VoxelType, typename ChunkCacheType>
@@ -515,7 +478,7 @@ namespace PolyVox
 		{
 			return *(mCurrentVoxel + POS_X_DELTA + POS_Y_DELTA);
 		}
-		return this->mVolume->getVoxel(this->mXPosInVolume+1,this->mYPosInVolume+1,this->mZPosInVolume);
+		return this->mVolume->getVoxel(this->mXPosInVolume + 1, this->mYPosInVolume + 1, this->mZPosInVolume);
 	}
 
 	template <typename VoxelType, typename ChunkCacheType>
@@ -525,7 +488,7 @@ namespace PolyVox
 		{
 			return *(mCurrentVoxel + POS_X_DELTA + POS_Y_DELTA + POS_Z_DELTA);
 		}
-		return this->mVolume->getVoxel(this->mXPosInVolume+1,this->mYPosInVolume+1,this->mZPosInVolume+1);
+		return this->mVolume->getVoxel(this->mXPosInVolume + 1, this->mYPosInVolume + 1, this->mZPosInVolume + 1);
 	}
 }
 

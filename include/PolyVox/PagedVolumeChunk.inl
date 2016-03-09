@@ -1,40 +1,41 @@
 /*******************************************************************************
-Copyright (c) 2005-2013 David Williams and Matthew Williams
-
-This software is provided 'as-is', without any express or implied
-warranty. In no event will the authors be held liable for any damages
-arising from the use of this software.
-
-Permission is granted to anyone to use this software for any purpose,
-including commercial applications, and to alter it and redistribute it
-freely, subject to the following restrictions:
-
-    1. The origin of this software must not be misrepresented; you must not
-    claim that you wrote the original software. If you use this software
-    in a product, an acknowledgment in the product documentation would be
-    appreciated but is not required.
-
-    2. Altered source versions must be plainly marked as such, and must not be
-    misrepresented as being the original software.
-
-    3. This notice may not be removed or altered from any source
-    distribution. 	
+* The MIT License (MIT)
+*
+* Copyright (c) 2015 David Williams and Matthew Williams
+*
+* Permission is hereby granted, free of charge, to any person obtaining a copy
+* of this software and associated documentation files (the "Software"), to deal
+* in the Software without restriction, including without limitation the rights
+* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+* copies of the Software, and to permit persons to whom the Software is
+* furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in all
+* copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
 *******************************************************************************/
 
-#include "PolyVox/Impl/Morton.h"
-#include "PolyVox/Impl/Utility.h"
+#include "Impl/Morton.h"
+#include "Impl/Utility.h"
 
 namespace PolyVox
 {
 	template <typename VoxelType, typename ChunkCacheType>
 	PagedVolume<VoxelType, ChunkCacheType>::Chunk::Chunk(Vector3DInt32 v3dPosition, uint16_t uSideLength, Pager* pPager)
 		:m_uChunkLastAccessed(0)
-		,m_bDataModified(true)
-		,m_tData(0)
-		,m_uSideLength(0)
-		,m_uSideLengthPower(0)
-		,m_pPager(pPager)
-		,m_v3dChunkSpacePosition(v3dPosition)
+		, m_bDataModified(true)
+		, m_tData(0)
+		, m_uSideLength(0)
+		, m_uSideLengthPower(0)
+		, m_pPager(pPager)
+		, m_v3dChunkSpacePosition(v3dPosition)
 	{
 		POLYVOX_ASSERT(m_pPager, "No valid pager supplied to chunk constructor.");
 		POLYVOX_ASSERT(uSideLength <= 256, "Chunk side length cannot be greater than 256.");
@@ -45,7 +46,7 @@ namespace PolyVox
 
 		// Allocate the data
 		const uint32_t uNoOfVoxels = m_uSideLength * m_uSideLength * m_uSideLength;
-		m_tData = new VoxelType[uNoOfVoxels];  
+		m_tData = new VoxelType[uNoOfVoxels];
 
 		// Pass the chunk to the Pager to give it a chance to initialise it with any data
 		// From the coordinates of the chunk we deduce the coordinates of the contained voxels.
@@ -133,9 +134,9 @@ namespace PolyVox
 
 	template <typename VoxelType, typename ChunkCacheType>
 	void PagedVolume<VoxelType, ChunkCacheType>::Chunk::setVoxel(const Vector3DUint16& v3dPos, VoxelType tValue)
-    {
+	{
 		setVoxel(v3dPos.getX(), v3dPos.getY(), v3dPos.getZ(), tValue);
-    }
+	}
 
 	template <typename VoxelType, typename ChunkCacheType>
 	uint32_t PagedVolume<VoxelType, ChunkCacheType>::Chunk::calculateSizeInBytes(void)
@@ -159,7 +160,7 @@ namespace PolyVox
 	// then the ordering is automatically handled correctly. 
 	template <typename VoxelType, typename ChunkCacheType>
 	void PagedVolume<VoxelType, ChunkCacheType>::Chunk::changeLinearOrderingToMorton(void)
-	{		
+	{
 		VoxelType* pTempBuffer = new VoxelType[m_uSideLength * m_uSideLength * m_uSideLength];
 
 		// We should prehaps restructure this loop. From: https://fgiesen.wordpress.com/2011/01/17/texture-tiling-and-swizzling/
@@ -239,7 +240,7 @@ namespace PolyVox
 		m_pVolume = pVolume;
 	}
 
-	void DefaultChunkCache::dirtyCache()
+	inline void DefaultChunkCache::dirtyCache()
 	{
 		m_pLastAccessedChunk = nullptr;
 	}

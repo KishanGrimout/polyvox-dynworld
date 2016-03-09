@@ -1,32 +1,33 @@
 /*******************************************************************************
-Copyright (c) 2005-2009 David Williams
-
-This software is provided 'as-is', without any express or implied
-warranty. In no event will the authors be held liable for any damages
-arising from the use of this software.
-
-Permission is granted to anyone to use this software for any purpose,
-including commercial applications, and to alter it and redistribute it
-freely, subject to the following restrictions:
-
-    1. The origin of this software must not be misrepresented; you must not
-    claim that you wrote the original software. If you use this software
-    in a product, an acknowledgment in the product documentation would be
-    appreciated but is not required.
-
-    2. Altered source versions must be plainly marked as such, and must not be
-    misrepresented as being the original software.
-
-    3. This notice may not be removed or altered from any source
-    distribution. 	
+* The MIT License (MIT)
+*
+* Copyright (c) 2015 David Williams and Matthew Williams
+*
+* Permission is hereby granted, free of charge, to any person obtaining a copy
+* of this software and associated documentation files (the "Software"), to deal
+* in the Software without restriction, including without limitation the rights
+* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+* copies of the Software, and to permit persons to whom the Software is
+* furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in all
+* copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
 *******************************************************************************/
 
 #ifndef __PolyVox_RawVolume_H__
 #define __PolyVox_RawVolume_H__
 
-#include "PolyVox/BaseVolume.h"
-#include "PolyVox/Region.h"
-#include "PolyVox/Vector.h"
+#include "BaseVolume.h"
+#include "Region.h"
+#include "Vector.h"
 
 #include <cstdlib> //For abort()
 #include <limits>
@@ -35,11 +36,17 @@ freely, subject to the following restrictions:
 
 namespace PolyVox
 {
+	/**
+	 * Simple volume implementation which stores data in a single large 3D array.
+	 *
+	 * This class is less memory-efficient than the PagedVolume, but it is the simplest possible
+	 * volume implementation which makes it useful for debugging and getting started with PolyVox.
+	 */
 	template <typename VoxelType>
 	class RawVolume : public BaseVolume<VoxelType>
 	{
 	public:
-		#ifndef SWIG
+#ifndef SWIG
 		//There seems to be some descrepency between Visual Studio and GCC about how the following class should be declared.
 		//There is a work around (see also See http://goo.gl/qu1wn) given below which appears to work on VS2010 and GCC, but
 		//which seems to cause internal compiler errors on VS2008 when building with the /Gm 'Enable Minimal Rebuild' compiler
@@ -50,7 +57,7 @@ namespace PolyVox
 #if defined(_MSC_VER)
 		class Sampler : public BaseVolume<VoxelType>::Sampler< RawVolume<VoxelType> > //This line works on VS2010
 #else
-                class Sampler : public BaseVolume<VoxelType>::template Sampler< RawVolume<VoxelType> > //This line works on GCC
+		class Sampler : public BaseVolume<VoxelType>::template Sampler< RawVolume<VoxelType> > //This line works on GCC
 #endif
 		{
 		public:
@@ -114,7 +121,7 @@ namespace PolyVox
 			bool m_bIsCurrentPositionValidInY;
 			bool m_bIsCurrentPositionValidInZ;
 		};
-		#endif // SWIG
+#endif // SWIG
 
 	public:
 		/// Constructor for creating a fixed size volume.
@@ -171,7 +178,7 @@ namespace PolyVox
 	};
 }
 
-#include "PolyVox/RawVolume.inl"
-#include "PolyVox/RawVolumeSampler.inl"
+#include "RawVolume.inl"
+#include "RawVolumeSampler.inl"
 
 #endif //__PolyVox_RawVolume_H__

@@ -1,27 +1,28 @@
 /*******************************************************************************
-Copyright (c) 2005-2009 David Williams
-
-This software is provided 'as-is', without any express or implied
-warranty. In no event will the authors be held liable for any damages
-arising from the use of this software.
-
-Permission is granted to anyone to use this software for any purpose,
-including commercial applications, and to alter it and redistribute it
-freely, subject to the following restrictions:
-
-    1. The origin of this software must not be misrepresented; you must not
-    claim that you wrote the original software. If you use this software
-    in a product, an acknowledgment in the product documentation would be
-    appreciated but is not required.
-
-    2. Altered source versions must be plainly marked as such, and must not be
-    misrepresented as being the original software.
-
-    3. This notice may not be removed or altered from any source
-    distribution. 	
+* The MIT License (MIT)
+*
+* Copyright (c) 2015 David Williams and Matthew Williams
+*
+* Permission is hereby granted, free of charge, to any person obtaining a copy
+* of this software and associated documentation files (the "Software"), to deal
+* in the Software without restriction, including without limitation the rights
+* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+* copies of the Software, and to permit persons to whom the Software is
+* furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in all
+* copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
 *******************************************************************************/
 
-#include "PolyVox/Impl/ErrorHandling.h"
+#include "Impl/ErrorHandling.h"
 
 #include <algorithm>
 #include <limits>
@@ -35,38 +36,38 @@ namespace PolyVox
 	/// \param uChunkSideLength The size of the chunks making up the volume. Small chunks will compress/decompress faster, but there will also be more of them meaning voxel access could be slower.
 	////////////////////////////////////////////////////////////////////////////////
 	template <typename VoxelType, typename ChunkCacheType>
-	PagedVolume<VoxelType, ChunkCacheType>::PagedVolume(Pager* pPager,	uint32_t uTargetMemoryUsageInBytes,	uint16_t uChunkSideLength)
+	PagedVolume<VoxelType, ChunkCacheType>::PagedVolume(Pager* pPager, uint32_t uTargetMemoryUsageInBytes, uint16_t uChunkSideLength)
 		:BaseVolume<VoxelType>()
 		, m_uChunkSideLength(uChunkSideLength)
 		, m_pPager(pPager)
 	{
-		// Validation of parameters
-		POLYVOX_THROW_IF(!pPager, std::invalid_argument, "You must provide a valid pager when constructing a PagedVolume");
-		POLYVOX_THROW_IF(uTargetMemoryUsageInBytes < 1 * 1024 * 1024, std::invalid_argument, "Target memory usage is too small to be practical");
-		POLYVOX_THROW_IF(m_uChunkSideLength == 0, std::invalid_argument, "Chunk side length cannot be zero.");
-		POLYVOX_THROW_IF(m_uChunkSideLength > 256, std::invalid_argument, "Chunk size is too large to be practical.");
-		POLYVOX_THROW_IF(!isPowerOf2(m_uChunkSideLength), std::invalid_argument, "Chunk side length must be a power of two.");
+			// Validation of parameters
+			POLYVOX_THROW_IF(!pPager, std::invalid_argument, "You must provide a valid pager when constructing a PagedVolume");
+			POLYVOX_THROW_IF(uTargetMemoryUsageInBytes < 1 * 1024 * 1024, std::invalid_argument, "Target memory usage is too small to be practical");
+			POLYVOX_THROW_IF(m_uChunkSideLength == 0, std::invalid_argument, "Chunk side length cannot be zero.");
+			POLYVOX_THROW_IF(m_uChunkSideLength > 256, std::invalid_argument, "Chunk size is too large to be practical.");
+			POLYVOX_THROW_IF(!isPowerOf2(m_uChunkSideLength), std::invalid_argument, "Chunk side length must be a power of two.");
 
-		// Used to perform multiplications and divisions by bit shifting.
-		m_uChunkSideLengthPower = logBase2(m_uChunkSideLength);
-		// Use to perform modulo by bit operations
-		m_iChunkMask = m_uChunkSideLength - 1;
+			// Used to perform multiplications and divisions by bit shifting.
+			m_uChunkSideLengthPower = logBase2(m_uChunkSideLength);
+			// Use to perform modulo by bit operations
+			m_iChunkMask = m_uChunkSideLength - 1;
 
-		// Calculate the number of chunks based on the memory limit and the size of each chunk.
-		uint32_t uChunkSizeInBytes = PagedVolume<VoxelType, ChunkCacheType>::Chunk::calculateSizeInBytes(m_uChunkSideLength);
-		m_uChunkCountLimit = uTargetMemoryUsageInBytes / uChunkSizeInBytes;
+			// Calculate the number of chunks based on the memory limit and the size of each chunk.
+			uint32_t uChunkSizeInBytes = PagedVolume<VoxelType, ChunkCacheType>::Chunk::calculateSizeInBytes(m_uChunkSideLength);
+			m_uChunkCountLimit = uTargetMemoryUsageInBytes / uChunkSizeInBytes;
 
-		// Enforce sensible limits on the number of chunks.
-		const uint32_t uMinPracticalNoOfChunks = 32; // Enough to make sure a chunks and it's neighbours can be loaded, with a few to spare.
-		const uint32_t uMaxPracticalNoOfChunks = uChunkArraySize / 2; // A hash table should only become half-full to avoid too many clashes.
-		POLYVOX_LOG_WARNING_IF(m_uChunkCountLimit < uMinPracticalNoOfChunks, "Requested memory usage limit of ",
-			uTargetMemoryUsageInBytes / (1024 * 1024), "Mb is too low and cannot be adhered to.");
-		m_uChunkCountLimit = (std::max)(m_uChunkCountLimit, uMinPracticalNoOfChunks);
-		m_uChunkCountLimit = (std::min)(m_uChunkCountLimit, uMaxPracticalNoOfChunks);
+			// Enforce sensible limits on the number of chunks.
+			const uint32_t uMinPracticalNoOfChunks = 32; // Enough to make sure a chunks and it's neighbours can be loaded, with a few to spare.
+			const uint32_t uMaxPracticalNoOfChunks = uChunkArraySize / 2; // A hash table should only become half-full to avoid too many clashes.
+			POLYVOX_LOG_WARNING_IF(m_uChunkCountLimit < uMinPracticalNoOfChunks, "Requested memory usage limit of ",
+				uTargetMemoryUsageInBytes / (1024 * 1024), "Mb is too low and cannot be adhered to.");
+			m_uChunkCountLimit = (std::max)(m_uChunkCountLimit, uMinPracticalNoOfChunks);
+			m_uChunkCountLimit = (std::min)(m_uChunkCountLimit, uMaxPracticalNoOfChunks);
 
-		// Inform the user about the chosen memory configuration.
-		POLYVOX_LOG_DEBUG("Memory usage limit for volume now set to ", (m_uChunkCountLimit * uChunkSizeInBytes) / (1024 * 1024),
-			"Mb (", m_uChunkCountLimit, " chunks of ", uChunkSizeInBytes / 1024, "Kb each).");
+			// Inform the user about the chosen memory configuration.
+			POLYVOX_LOG_DEBUG("Memory usage limit for volume now set to ", (m_uChunkCountLimit * uChunkSizeInBytes) / (1024 * 1024),
+				"Mb (", m_uChunkCountLimit, " chunks of ", uChunkSizeInBytes / 1024, "Kb each).");
 	}
 
 	////////////////////////////////////////////////////////////////////////////////
@@ -184,13 +185,13 @@ namespace PolyVox
 	{
 		// Convert the start and end positions into chunk space coordinates
 		Vector3DInt32 v3dStart;
-		for(int i = 0; i < 3; i++)
+		for (int i = 0; i < 3; i++)
 		{
 			v3dStart.setElement(i, regPrefetch.getLowerCorner().getElement(i) >> m_uChunkSideLengthPower);
 		}
 
 		Vector3DInt32 v3dEnd;
-		for(int i = 0; i < 3; i++)
+		for (int i = 0; i < 3; i++)
 		{
 			v3dEnd.setElement(i, regPrefetch.getUpperCorner().getElement(i) >> m_uChunkSideLengthPower);
 		}
@@ -202,13 +203,13 @@ namespace PolyVox
 		uNoOfChunks = (std::min)(uNoOfChunks, m_uChunkCountLimit);
 
 		// Loops over the specified positions and touch the corresponding chunks.
-		for(int32_t x = v3dStart.getX(); x <= v3dEnd.getX(); x++)
+		for (int32_t x = v3dStart.getX(); x <= v3dEnd.getX(); x++)
 		{
-			for(int32_t y = v3dStart.getY(); y <= v3dEnd.getY(); y++)
+			for (int32_t y = v3dStart.getY(); y <= v3dEnd.getY(); y++)
 			{
-				for(int32_t z = v3dStart.getZ(); z <= v3dEnd.getZ(); z++)
-				{					
-					getChunk(x,y,z);
+				for (int32_t z = v3dStart.getZ(); z <= v3dEnd.getZ(); z++)
+				{
+					getChunk(x, y, z);
 				}
 			}
 		}
@@ -229,41 +230,6 @@ namespace PolyVox
 			m_arrayChunks[uIndex] = nullptr;
 		}
 	}
-
-	////////////////////////////////////////////////////////////////////////////////
-	/// Removes all voxels in the specified Region from memory, and calls dataOverflowHandler() to ensure the application has a chance to store the data. It is possible that there are no voxels loaded in the Region, in which case the function will have no effect.
-	////////////////////////////////////////////////////////////////////////////////
-	/*template <typename VoxelType, typename ChunkCacheType>
-	void PagedVolume<VoxelType, ChunkCacheType>::flush(Region regFlush)
-	{
-		// Clear chunk cache as all chunks are about to be removed.
-		m_tChunkCache.dirtyCache();
-
-		// Convert the start and end positions into chunk space coordinates
-		Vector3DInt32 v3dStart;
-		for(int i = 0; i < 3; i++)
-		{
-			v3dStart.setElement(i, regFlush.getLowerCorner().getElement(i) >> m_uChunkSideLengthPower);
-		}
-
-		Vector3DInt32 v3dEnd;
-		for(int i = 0; i < 3; i++)
-		{
-			v3dEnd.setElement(i, regFlush.getUpperCorner().getElement(i) >> m_uChunkSideLengthPower);
-		}
-
-		// Loops over the specified positions and delete the corresponding chunks.
-		for(int32_t x = v3dStart.getX(); x <= v3dEnd.getX(); x++)
-		{
-			for(int32_t y = v3dStart.getY(); y <= v3dEnd.getY(); y++)
-			{
-				for(int32_t z = v3dStart.getZ(); z <= v3dEnd.getZ(); z++)
-				{
-					m_mapChunks.erase(Vector3DInt32(x, y, z));
-				}
-			}
-		}
-	}*/
 
 	template <typename VoxelType, typename ChunkCacheType>
 	typename PagedVolume<VoxelType, ChunkCacheType>::Chunk* PagedVolume<VoxelType, ChunkCacheType>::getChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const

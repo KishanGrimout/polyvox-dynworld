@@ -1,24 +1,25 @@
 /*******************************************************************************
-Copyright (c) 2010 Matt Williams
-
-This software is provided 'as-is', without any express or implied
-warranty. In no event will the authors be held liable for any damages
-arising from the use of this software.
-
-Permission is granted to anyone to use this software for any purpose,
-including commercial applications, and to alter it and redistribute it
-freely, subject to the following restrictions:
-
-    1. The origin of this software must not be misrepresented; you must not
-    claim that you wrote the original software. If you use this software
-    in a product, an acknowledgment in the product documentation would be
-    appreciated but is not required.
-
-    2. Altered source versions must be plainly marked as such, and must not be
-    misrepresented as being the original software.
-
-    3. This notice may not be removed or altered from any source
-    distribution.
+* The MIT License (MIT)
+*
+* Copyright (c) 2015 Matthew Williams and David Williams
+*
+* Permission is hereby granted, free of charge, to any person obtaining a copy
+* of this software and associated documentation files (the "Software"), to deal
+* in the Software without restriction, including without limitation the rights
+* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+* copies of the Software, and to permit persons to whom the Software is
+* furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in all
+* copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
 *******************************************************************************/
 
 #include "TestVolumeSubclass.h"
@@ -45,17 +46,17 @@ public:
 	//in the future
 	//typedef BaseVolume<VoxelType> VolumeOfVoxelType; //Workaround for GCC/VS2010 differences. See http://goo.gl/qu1wn
 	//class Sampler : public VolumeOfVoxelType::template Sampler< VolumeSubclass<VoxelType> >
-	#if defined(_MSC_VER)
-		class Sampler : public BaseVolume<VoxelType>::Sampler< VolumeSubclass<VoxelType> > //This line works on VS2010
-	#else
-		class Sampler : public BaseVolume<VoxelType>::template Sampler< VolumeSubclass<VoxelType> > //This line works on GCC
-	#endif
+#if defined(_MSC_VER)
+	class Sampler : public BaseVolume<VoxelType>::Sampler< VolumeSubclass<VoxelType> > //This line works on VS2010
+#else
+	class Sampler : public BaseVolume<VoxelType>::template Sampler< VolumeSubclass<VoxelType> > //This line works on GCC
+#endif
 	{
 	public:
 		Sampler(VolumeSubclass<VoxelType>* volume)
 			:BaseVolume<VoxelType>::template Sampler< VolumeSubclass<VoxelType> >(volume)
 		{
-			this->mVolume = volume;
+				this->mVolume = volume;
 		}
 		//~Sampler();
 	};
@@ -65,7 +66,7 @@ public:
 		:BaseVolume<VoxelType>()
 		, mVolumeData(regValid.getWidthInVoxels(), regValid.getHeightInVoxels(), regValid.getDepthInVoxels())
 	{
-		//mVolumeData.resize(ArraySizes(this->getWidth())(this->getHeight())(this->getDepth()));
+			//mVolumeData.resize(ArraySizes(this->getWidth())(this->getHeight())(this->getDepth()));
 	}
 	/// Destructor
 	~VolumeSubclass() {};
@@ -96,7 +97,7 @@ public:
 	/// Sets the voxel at the position given by <tt>x,y,z</tt> coordinates
 	bool setVoxel(int32_t uXPos, int32_t uYPos, int32_t uZPos, VoxelType tValue)
 	{
-		if( (uXPos >= 0) && (uXPos < static_cast<int32_t>(mVolumeData.getDimension(0))) &&
+		if ((uXPos >= 0) && (uXPos < static_cast<int32_t>(mVolumeData.getDimension(0))) &&
 			(uYPos >= 0) && (uYPos < static_cast<int32_t>(mVolumeData.getDimension(1))) &&
 			(uZPos >= 0) && (uZPos < static_cast<int32_t>(mVolumeData.getDimension(2))))
 		{
@@ -114,10 +115,7 @@ public:
 	/// Calculates approximatly how many bytes of memory the volume is currently using.
 	uint32_t calculateSizeInBytes(void) { return 0; }
 
-	/// Deprecated - I don't think we should expose this function? Let us know if you disagree...
-	//void resize(const Region& regValidRegion);
-
-private:	
+private:
 	Array<3, VoxelType> mVolumeData;
 };
 
@@ -133,7 +131,7 @@ void TestVolumeSubclass::testExtractSurface()
 			for (int32_t x = 0; x < region.getWidthInVoxels(); x++)
 			{
 				Material8 mat(1);
-				volumeSubclass.setVoxel(Vector3DInt32(x,y,z),mat);
+				volumeSubclass.setVoxel(Vector3DInt32(x, y, z), mat);
 			}
 		}
 	}

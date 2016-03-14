@@ -46,34 +46,34 @@ namespace PolyVox
 	static const std::array<int32_t, 256> deltaY = { 2, 14, 2, 110, 2, 14, 2, 878, 2, 14, 2, 110, 2, 14, 2, 7022, 2, 14, 2, 110, 2, 14, 2, 878, 2, 14, 2, 110, 2, 14, 2, 56174, 2, 14, 2, 110, 2, 14, 2, 878, 2, 14, 2, 110, 2, 14, 2, 7022, 2, 14, 2, 110, 2, 14, 2, 878, 2, 14, 2, 110, 2, 14, 2, 449390, 2, 14, 2, 110, 2, 14, 2, 878, 2, 14, 2, 110, 2, 14, 2, 7022, 2, 14, 2, 110, 2, 14, 2, 878, 2, 14, 2, 110, 2, 14, 2, 56174, 2, 14, 2, 110, 2, 14, 2, 878, 2, 14, 2, 110, 2, 14, 2, 7022, 2, 14, 2, 110, 2, 14, 2, 878, 2, 14, 2, 110, 2, 14, 2, 3595118, 2, 14, 2, 110, 2, 14, 2, 878, 2, 14, 2, 110, 2, 14, 2, 7022, 2, 14, 2, 110, 2, 14, 2, 878, 2, 14, 2, 110, 2, 14, 2, 56174, 2, 14, 2, 110, 2, 14, 2, 878, 2, 14, 2, 110, 2, 14, 2, 7022, 2, 14, 2, 110, 2, 14, 2, 878, 2, 14, 2, 110, 2, 14, 2, 449390, 2, 14, 2, 110, 2, 14, 2, 878, 2, 14, 2, 110, 2, 14, 2, 7022, 2, 14, 2, 110, 2, 14, 2, 878, 2, 14, 2, 110, 2, 14, 2, 56174, 2, 14, 2, 110, 2, 14, 2, 878, 2, 14, 2, 110, 2, 14, 2, 7022, 2, 14, 2, 110, 2, 14, 2, 878, 2, 14, 2, 110, 2, 14, 2 };
 	static const std::array<int32_t, 256> deltaZ = { 4, 28, 4, 220, 4, 28, 4, 1756, 4, 28, 4, 220, 4, 28, 4, 14044, 4, 28, 4, 220, 4, 28, 4, 1756, 4, 28, 4, 220, 4, 28, 4, 112348, 4, 28, 4, 220, 4, 28, 4, 1756, 4, 28, 4, 220, 4, 28, 4, 14044, 4, 28, 4, 220, 4, 28, 4, 1756, 4, 28, 4, 220, 4, 28, 4, 898780, 4, 28, 4, 220, 4, 28, 4, 1756, 4, 28, 4, 220, 4, 28, 4, 14044, 4, 28, 4, 220, 4, 28, 4, 1756, 4, 28, 4, 220, 4, 28, 4, 112348, 4, 28, 4, 220, 4, 28, 4, 1756, 4, 28, 4, 220, 4, 28, 4, 14044, 4, 28, 4, 220, 4, 28, 4, 1756, 4, 28, 4, 220, 4, 28, 4, 7190236, 4, 28, 4, 220, 4, 28, 4, 1756, 4, 28, 4, 220, 4, 28, 4, 14044, 4, 28, 4, 220, 4, 28, 4, 1756, 4, 28, 4, 220, 4, 28, 4, 112348, 4, 28, 4, 220, 4, 28, 4, 1756, 4, 28, 4, 220, 4, 28, 4, 14044, 4, 28, 4, 220, 4, 28, 4, 1756, 4, 28, 4, 220, 4, 28, 4, 898780, 4, 28, 4, 220, 4, 28, 4, 1756, 4, 28, 4, 220, 4, 28, 4, 14044, 4, 28, 4, 220, 4, 28, 4, 1756, 4, 28, 4, 220, 4, 28, 4, 112348, 4, 28, 4, 220, 4, 28, 4, 1756, 4, 28, 4, 220, 4, 28, 4, 14044, 4, 28, 4, 220, 4, 28, 4, 1756, 4, 28, 4, 220, 4, 28, 4 };
 
-	template <typename VoxelType, typename ChunkCacheType>
-	PagedVolume<VoxelType, ChunkCacheType>::Sampler::Sampler(PagedVolume<VoxelType, ChunkCacheType>* volume)
-		:BaseVolume<VoxelType>::template Sampler< PagedVolume<VoxelType, ChunkCacheType> >(volume), m_uChunkSideLengthMinusOne(volume ? volume->m_uChunkSideLength - 1 : 0)
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::Sampler(PagedVolume<VoxelType, ChunkCacheType, RWLockType>* volume)
+		:BaseVolume<VoxelType>::template Sampler< PagedVolume<VoxelType, ChunkCacheType, RWLockType> >(volume), m_uChunkSideLengthMinusOne(volume ? volume->m_uChunkSideLength - 1 : 0)
 	{
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	PagedVolume<VoxelType, ChunkCacheType>::Sampler::~Sampler()
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::~Sampler()
 	{
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Sampler::getVoxel(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::getVoxel(void) const
 	{
 		return *mCurrentVoxel;
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	void PagedVolume<VoxelType, ChunkCacheType>::Sampler::setPosition(const Vector3DInt32& v3dNewPos)
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::setPosition(const Vector3DInt32& v3dNewPos)
 	{
 		setPosition(v3dNewPos.getX(), v3dNewPos.getY(), v3dNewPos.getZ());
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	void PagedVolume<VoxelType, ChunkCacheType>::Sampler::setPosition(int32_t xPos, int32_t yPos, int32_t zPos)
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::setPosition(int32_t xPos, int32_t yPos, int32_t zPos)
 	{
 		// Base version updates position and validity flags.
-		BaseVolume<VoxelType>::template Sampler< PagedVolume<VoxelType, ChunkCacheType> >::setPosition(xPos, yPos, zPos);
+		BaseVolume<VoxelType>::template Sampler< PagedVolume<VoxelType, ChunkCacheType, RWLockType> >::setPosition(xPos, yPos, zPos);
 
 		// Then we update the voxel pointer
 		const int32_t uXChunk = this->mXPosInVolume >> this->mVolume->m_uChunkSideLengthPower;
@@ -93,19 +93,19 @@ namespace PolyVox
 		mCurrentVoxel = pCurrentChunk->m_tData + uVoxelIndexInChunk;
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	bool PagedVolume<VoxelType, ChunkCacheType>::Sampler::setVoxel(VoxelType tValue)
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	bool PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::setVoxel(VoxelType tValue)
 	{
 		//Need to think what effect this has on any existing iterators.
 		POLYVOX_THROW(not_implemented, "This function cannot be used on PagedVolume samplers.");
 		return false;
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	void PagedVolume<VoxelType, ChunkCacheType>::Sampler::movePositiveX(void)
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::movePositiveX(void)
 	{
 		// Base version updates position and validity flags.
-		BaseVolume<VoxelType>::template Sampler< PagedVolume<VoxelType, ChunkCacheType> >::movePositiveX();
+		BaseVolume<VoxelType>::template Sampler< PagedVolume<VoxelType, ChunkCacheType, RWLockType> >::movePositiveX();
 
 		// Then we update the voxel pointer
 		if (CAN_GO_POS_X(this->m_uXPosInChunk))
@@ -121,11 +121,11 @@ namespace PolyVox
 		}
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	void PagedVolume<VoxelType, ChunkCacheType>::Sampler::movePositiveY(void)
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::movePositiveY(void)
 	{
 		// Base version updates position and validity flags.
-		BaseVolume<VoxelType>::template Sampler< PagedVolume<VoxelType, ChunkCacheType> >::movePositiveY();
+		BaseVolume<VoxelType>::template Sampler< PagedVolume<VoxelType, ChunkCacheType, RWLockType> >::movePositiveY();
 
 		// Then we update the voxel pointer
 		if (CAN_GO_POS_Y(this->m_uYPosInChunk))
@@ -141,11 +141,11 @@ namespace PolyVox
 		}
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	void PagedVolume<VoxelType, ChunkCacheType>::Sampler::movePositiveZ(void)
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::movePositiveZ(void)
 	{
 		// Base version updates position and validity flags.
-		BaseVolume<VoxelType>::template Sampler< PagedVolume<VoxelType, ChunkCacheType> >::movePositiveZ();
+		BaseVolume<VoxelType>::template Sampler< PagedVolume<VoxelType, ChunkCacheType, RWLockType> >::movePositiveZ();
 
 		// Then we update the voxel pointer
 		if (CAN_GO_POS_Z(this->m_uZPosInChunk))
@@ -161,11 +161,11 @@ namespace PolyVox
 		}
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	void PagedVolume<VoxelType, ChunkCacheType>::Sampler::moveNegativeX(void)
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::moveNegativeX(void)
 	{
 		// Base version updates position and validity flags.
-		BaseVolume<VoxelType>::template Sampler< PagedVolume<VoxelType, ChunkCacheType> >::moveNegativeX();
+		BaseVolume<VoxelType>::template Sampler< PagedVolume<VoxelType, ChunkCacheType, RWLockType> >::moveNegativeX();
 
 		// Then we update the voxel pointer
 		if (CAN_GO_NEG_X(this->m_uXPosInChunk))
@@ -181,11 +181,11 @@ namespace PolyVox
 		}
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	void PagedVolume<VoxelType, ChunkCacheType>::Sampler::moveNegativeY(void)
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::moveNegativeY(void)
 	{
 		// Base version updates position and validity flags.
-		BaseVolume<VoxelType>::template Sampler< PagedVolume<VoxelType, ChunkCacheType> >::moveNegativeY();
+		BaseVolume<VoxelType>::template Sampler< PagedVolume<VoxelType, ChunkCacheType, RWLockType> >::moveNegativeY();
 
 		// Then we update the voxel pointer
 		if (CAN_GO_NEG_Y(this->m_uYPosInChunk))
@@ -201,11 +201,11 @@ namespace PolyVox
 		}
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	void PagedVolume<VoxelType, ChunkCacheType>::Sampler::moveNegativeZ(void)
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::moveNegativeZ(void)
 	{
 		// Base version updates position and validity flags.
-		BaseVolume<VoxelType>::template Sampler< PagedVolume<VoxelType, ChunkCacheType> >::moveNegativeZ();
+		BaseVolume<VoxelType>::template Sampler< PagedVolume<VoxelType, ChunkCacheType, RWLockType> >::moveNegativeZ();
 
 		// Then we update the voxel pointer
 		if (CAN_GO_NEG_Z(this->m_uZPosInChunk))
@@ -221,8 +221,8 @@ namespace PolyVox
 		}
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Sampler::peekVoxel1nx1ny1nz(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::peekVoxel1nx1ny1nz(void) const
 	{
 		if (CAN_GO_NEG_X(this->m_uXPosInChunk) && CAN_GO_NEG_Y(this->m_uYPosInChunk) && CAN_GO_NEG_Z(this->m_uZPosInChunk))
 		{
@@ -231,8 +231,8 @@ namespace PolyVox
 		return this->mVolume->getVoxel(this->mXPosInVolume - 1, this->mYPosInVolume - 1, this->mZPosInVolume - 1);
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Sampler::peekVoxel1nx1ny0pz(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::peekVoxel1nx1ny0pz(void) const
 	{
 		if (CAN_GO_NEG_X(this->m_uXPosInChunk) && CAN_GO_NEG_Y(this->m_uYPosInChunk))
 		{
@@ -241,8 +241,8 @@ namespace PolyVox
 		return this->mVolume->getVoxel(this->mXPosInVolume - 1, this->mYPosInVolume - 1, this->mZPosInVolume);
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Sampler::peekVoxel1nx1ny1pz(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::peekVoxel1nx1ny1pz(void) const
 	{
 		if (CAN_GO_NEG_X(this->m_uXPosInChunk) && CAN_GO_NEG_Y(this->m_uYPosInChunk) && CAN_GO_POS_Z(this->m_uZPosInChunk))
 		{
@@ -251,8 +251,8 @@ namespace PolyVox
 		return this->mVolume->getVoxel(this->mXPosInVolume - 1, this->mYPosInVolume - 1, this->mZPosInVolume + 1);
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Sampler::peekVoxel1nx0py1nz(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::peekVoxel1nx0py1nz(void) const
 	{
 		if (CAN_GO_NEG_X(this->m_uXPosInChunk) && CAN_GO_NEG_Z(this->m_uZPosInChunk))
 		{
@@ -261,8 +261,8 @@ namespace PolyVox
 		return this->mVolume->getVoxel(this->mXPosInVolume - 1, this->mYPosInVolume, this->mZPosInVolume - 1);
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Sampler::peekVoxel1nx0py0pz(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::peekVoxel1nx0py0pz(void) const
 	{
 		if (CAN_GO_NEG_X(this->m_uXPosInChunk))
 		{
@@ -271,8 +271,8 @@ namespace PolyVox
 		return this->mVolume->getVoxel(this->mXPosInVolume - 1, this->mYPosInVolume, this->mZPosInVolume);
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Sampler::peekVoxel1nx0py1pz(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::peekVoxel1nx0py1pz(void) const
 	{
 		if (CAN_GO_NEG_X(this->m_uXPosInChunk) && CAN_GO_POS_Z(this->m_uZPosInChunk))
 		{
@@ -281,8 +281,8 @@ namespace PolyVox
 		return this->mVolume->getVoxel(this->mXPosInVolume - 1, this->mYPosInVolume, this->mZPosInVolume + 1);
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Sampler::peekVoxel1nx1py1nz(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::peekVoxel1nx1py1nz(void) const
 	{
 		if (CAN_GO_NEG_X(this->m_uXPosInChunk) && CAN_GO_POS_Y(this->m_uYPosInChunk) && CAN_GO_NEG_Z(this->m_uZPosInChunk))
 		{
@@ -291,8 +291,8 @@ namespace PolyVox
 		return this->mVolume->getVoxel(this->mXPosInVolume - 1, this->mYPosInVolume + 1, this->mZPosInVolume - 1);
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Sampler::peekVoxel1nx1py0pz(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::peekVoxel1nx1py0pz(void) const
 	{
 		if (CAN_GO_NEG_X(this->m_uXPosInChunk) && CAN_GO_POS_Y(this->m_uYPosInChunk))
 		{
@@ -301,8 +301,8 @@ namespace PolyVox
 		return this->mVolume->getVoxel(this->mXPosInVolume - 1, this->mYPosInVolume + 1, this->mZPosInVolume);
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Sampler::peekVoxel1nx1py1pz(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::peekVoxel1nx1py1pz(void) const
 	{
 		if (CAN_GO_NEG_X(this->m_uXPosInChunk) && CAN_GO_POS_Y(this->m_uYPosInChunk) && CAN_GO_POS_Z(this->m_uZPosInChunk))
 		{
@@ -313,8 +313,8 @@ namespace PolyVox
 
 	//////////////////////////////////////////////////////////////////////////
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Sampler::peekVoxel0px1ny1nz(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::peekVoxel0px1ny1nz(void) const
 	{
 		if (CAN_GO_NEG_Y(this->m_uYPosInChunk) && CAN_GO_NEG_Z(this->m_uZPosInChunk))
 		{
@@ -323,8 +323,8 @@ namespace PolyVox
 		return this->mVolume->getVoxel(this->mXPosInVolume, this->mYPosInVolume - 1, this->mZPosInVolume - 1);
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Sampler::peekVoxel0px1ny0pz(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::peekVoxel0px1ny0pz(void) const
 	{
 		if (CAN_GO_NEG_Y(this->m_uYPosInChunk))
 		{
@@ -333,8 +333,8 @@ namespace PolyVox
 		return this->mVolume->getVoxel(this->mXPosInVolume, this->mYPosInVolume - 1, this->mZPosInVolume);
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Sampler::peekVoxel0px1ny1pz(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::peekVoxel0px1ny1pz(void) const
 	{
 		if (CAN_GO_NEG_Y(this->m_uYPosInChunk) && CAN_GO_POS_Z(this->m_uZPosInChunk))
 		{
@@ -343,8 +343,8 @@ namespace PolyVox
 		return this->mVolume->getVoxel(this->mXPosInVolume, this->mYPosInVolume - 1, this->mZPosInVolume + 1);
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Sampler::peekVoxel0px0py1nz(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::peekVoxel0px0py1nz(void) const
 	{
 		if (CAN_GO_NEG_Z(this->m_uZPosInChunk))
 		{
@@ -353,14 +353,14 @@ namespace PolyVox
 		return this->mVolume->getVoxel(this->mXPosInVolume, this->mYPosInVolume, this->mZPosInVolume - 1);
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Sampler::peekVoxel0px0py0pz(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::peekVoxel0px0py0pz(void) const
 	{
 		return *mCurrentVoxel;
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Sampler::peekVoxel0px0py1pz(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::peekVoxel0px0py1pz(void) const
 	{
 		if (CAN_GO_POS_Z(this->m_uZPosInChunk))
 		{
@@ -369,8 +369,8 @@ namespace PolyVox
 		return this->mVolume->getVoxel(this->mXPosInVolume, this->mYPosInVolume, this->mZPosInVolume + 1);
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Sampler::peekVoxel0px1py1nz(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::peekVoxel0px1py1nz(void) const
 	{
 		if (CAN_GO_POS_Y(this->m_uYPosInChunk) && CAN_GO_NEG_Z(this->m_uZPosInChunk))
 		{
@@ -379,8 +379,8 @@ namespace PolyVox
 		return this->mVolume->getVoxel(this->mXPosInVolume, this->mYPosInVolume + 1, this->mZPosInVolume - 1);
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Sampler::peekVoxel0px1py0pz(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::peekVoxel0px1py0pz(void) const
 	{
 		if (CAN_GO_POS_Y(this->m_uYPosInChunk))
 		{
@@ -389,8 +389,8 @@ namespace PolyVox
 		return this->mVolume->getVoxel(this->mXPosInVolume, this->mYPosInVolume + 1, this->mZPosInVolume);
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Sampler::peekVoxel0px1py1pz(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::peekVoxel0px1py1pz(void) const
 	{
 		if (CAN_GO_POS_Y(this->m_uYPosInChunk) && CAN_GO_POS_Z(this->m_uZPosInChunk))
 		{
@@ -401,8 +401,8 @@ namespace PolyVox
 
 	//////////////////////////////////////////////////////////////////////////
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Sampler::peekVoxel1px1ny1nz(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::peekVoxel1px1ny1nz(void) const
 	{
 		if (CAN_GO_POS_X(this->m_uXPosInChunk) && CAN_GO_NEG_Y(this->m_uYPosInChunk) && CAN_GO_NEG_Z(this->m_uZPosInChunk))
 		{
@@ -411,8 +411,8 @@ namespace PolyVox
 		return this->mVolume->getVoxel(this->mXPosInVolume + 1, this->mYPosInVolume - 1, this->mZPosInVolume - 1);
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Sampler::peekVoxel1px1ny0pz(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::peekVoxel1px1ny0pz(void) const
 	{
 		if (CAN_GO_POS_X(this->m_uXPosInChunk) && CAN_GO_NEG_Y(this->m_uYPosInChunk))
 		{
@@ -421,8 +421,8 @@ namespace PolyVox
 		return this->mVolume->getVoxel(this->mXPosInVolume + 1, this->mYPosInVolume - 1, this->mZPosInVolume);
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Sampler::peekVoxel1px1ny1pz(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::peekVoxel1px1ny1pz(void) const
 	{
 		if (CAN_GO_POS_X(this->m_uXPosInChunk) && CAN_GO_NEG_Y(this->m_uYPosInChunk) && CAN_GO_POS_Z(this->m_uZPosInChunk))
 		{
@@ -431,8 +431,8 @@ namespace PolyVox
 		return this->mVolume->getVoxel(this->mXPosInVolume + 1, this->mYPosInVolume - 1, this->mZPosInVolume + 1);
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Sampler::peekVoxel1px0py1nz(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::peekVoxel1px0py1nz(void) const
 	{
 		if (CAN_GO_POS_X(this->m_uXPosInChunk) && CAN_GO_NEG_Z(this->m_uZPosInChunk))
 		{
@@ -441,8 +441,8 @@ namespace PolyVox
 		return this->mVolume->getVoxel(this->mXPosInVolume + 1, this->mYPosInVolume, this->mZPosInVolume - 1);
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Sampler::peekVoxel1px0py0pz(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::peekVoxel1px0py0pz(void) const
 	{
 		if (CAN_GO_POS_X(this->m_uXPosInChunk))
 		{
@@ -451,8 +451,8 @@ namespace PolyVox
 		return this->mVolume->getVoxel(this->mXPosInVolume + 1, this->mYPosInVolume, this->mZPosInVolume);
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Sampler::peekVoxel1px0py1pz(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::peekVoxel1px0py1pz(void) const
 	{
 		if (CAN_GO_POS_X(this->m_uXPosInChunk) && CAN_GO_POS_Z(this->m_uZPosInChunk))
 		{
@@ -461,8 +461,8 @@ namespace PolyVox
 		return this->mVolume->getVoxel(this->mXPosInVolume + 1, this->mYPosInVolume, this->mZPosInVolume + 1);
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Sampler::peekVoxel1px1py1nz(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::peekVoxel1px1py1nz(void) const
 	{
 		if (CAN_GO_POS_X(this->m_uXPosInChunk) && CAN_GO_POS_Y(this->m_uYPosInChunk) && CAN_GO_NEG_Z(this->m_uZPosInChunk))
 		{
@@ -471,8 +471,8 @@ namespace PolyVox
 		return this->mVolume->getVoxel(this->mXPosInVolume + 1, this->mYPosInVolume + 1, this->mZPosInVolume - 1);
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Sampler::peekVoxel1px1py0pz(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::peekVoxel1px1py0pz(void) const
 	{
 		if (CAN_GO_POS_X(this->m_uXPosInChunk) && CAN_GO_POS_Y(this->m_uYPosInChunk))
 		{
@@ -481,8 +481,8 @@ namespace PolyVox
 		return this->mVolume->getVoxel(this->mXPosInVolume + 1, this->mYPosInVolume + 1, this->mZPosInVolume);
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Sampler::peekVoxel1px1py1pz(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Sampler::peekVoxel1px1py1pz(void) const
 	{
 		if (CAN_GO_POS_X(this->m_uXPosInChunk) && CAN_GO_POS_Y(this->m_uYPosInChunk) && CAN_GO_POS_Z(this->m_uZPosInChunk))
 		{

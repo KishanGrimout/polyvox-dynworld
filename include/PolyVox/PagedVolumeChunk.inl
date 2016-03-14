@@ -27,8 +27,8 @@
 
 namespace PolyVox
 {
-	template <typename VoxelType, typename ChunkCacheType>
-	PagedVolume<VoxelType, ChunkCacheType>::Chunk::Chunk(Vector3DInt32 v3dPosition, uint16_t uSideLength, Pager* pPager)
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk::Chunk(Vector3DInt32 v3dPosition, uint16_t uSideLength, Pager* pPager)
 		:m_uChunkLastAccessed(0)
 		, m_bDataModified(true)
 		, m_tData(0)
@@ -65,8 +65,8 @@ namespace PolyVox
 		m_bDataModified = false;
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	PagedVolume<VoxelType, ChunkCacheType>::Chunk::~Chunk()
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk::~Chunk()
 	{
 		if (m_pPager)
 		{
@@ -82,20 +82,22 @@ namespace PolyVox
 		m_tData = 0;
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType* PagedVolume<VoxelType, ChunkCacheType>::Chunk::getData(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType* PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk::getData(void) const
 	{
+		AutoReadLock<_Myt::Chunk> lock(this);
 		return m_tData;
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	uint32_t PagedVolume<VoxelType, ChunkCacheType>::Chunk::getDataSizeInBytes(void) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	uint32_t PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk::getDataSizeInBytes(void) const
 	{
+		AutoReadLock<_Myt::Chunk> lock(this);
 		return m_uSideLength * m_uSideLength * m_uSideLength * sizeof(VoxelType);
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Chunk::getVoxel(uint32_t uXPos, uint32_t uYPos, uint32_t uZPos) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk::getVoxel(uint32_t uXPos, uint32_t uYPos, uint32_t uZPos) const
 	{
 		// This code is not usually expected to be called by the user, with the exception of when implementing paging 
 		// of uncompressed data. It's a performance critical code path so we use asserts rather than exceptions.
@@ -106,17 +108,18 @@ namespace PolyVox
 
 		uint32_t index = morton256_x[uXPos] | morton256_y[uYPos] | morton256_z[uZPos];
 
+		AutoReadLock<_Myt::Chunk> lock(this);
 		return m_tData[index];
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType>::Chunk::getVoxel(const Vector3DUint16& v3dPos) const
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk::getVoxel(const Vector3DUint16& v3dPos) const
 	{
 		return getVoxel(v3dPos.getX(), v3dPos.getY(), v3dPos.getZ());
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	void PagedVolume<VoxelType, ChunkCacheType>::Chunk::setVoxel(uint32_t uXPos, uint32_t uYPos, uint32_t uZPos, VoxelType tValue)
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk::setVoxel(uint32_t uXPos, uint32_t uYPos, uint32_t uZPos, VoxelType tValue)
 	{
 		// This code is not usually expected to be called by the user, with the exception of when implementing paging 
 		// of uncompressed data. It's a performance critical code path so we use asserts rather than exceptions.
@@ -127,26 +130,27 @@ namespace PolyVox
 
 		uint32_t index = morton256_x[uXPos] | morton256_y[uYPos] | morton256_z[uZPos];
 
+		AutoWriteLock<_Myt::Chunk> lock(this);
 		m_tData[index] = tValue;
 
 		this->m_bDataModified = true;
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	void PagedVolume<VoxelType, ChunkCacheType>::Chunk::setVoxel(const Vector3DUint16& v3dPos, VoxelType tValue)
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk::setVoxel(const Vector3DUint16& v3dPos, VoxelType tValue)
 	{
 		setVoxel(v3dPos.getX(), v3dPos.getY(), v3dPos.getZ(), tValue);
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	uint32_t PagedVolume<VoxelType, ChunkCacheType>::Chunk::calculateSizeInBytes(void)
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	uint32_t PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk::calculateSizeInBytes(void)
 	{
 		// Call through to the static version
 		return calculateSizeInBytes(m_uSideLength);
 	}
 
-	template <typename VoxelType, typename ChunkCacheType>
-	uint32_t PagedVolume<VoxelType, ChunkCacheType>::Chunk::calculateSizeInBytes(uint32_t uSideLength)
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	uint32_t PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk::calculateSizeInBytes(uint32_t uSideLength)
 	{
 		// Note: We disregard the size of the other class members as they are likely to be very small compared to the size of the
 		// allocated voxel data. This also keeps the reported size as a power of two, which makes other memory calculations easier.
@@ -158,9 +162,10 @@ namespace PolyVox
 	// use Morton encoding. Users who still have data in linear order (on disk, in databases, etc) will need to call this function
 	// if they load the data in by memcpy()ing it via the raw pointer. On the other hand, if they set the data using setVoxel()
 	// then the ordering is automatically handled correctly. 
-	template <typename VoxelType, typename ChunkCacheType>
-	void PagedVolume<VoxelType, ChunkCacheType>::Chunk::changeLinearOrderingToMorton(void)
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk::changeLinearOrderingToMorton(void)
 	{
+		AutoReadLock lock(this);
 		VoxelType* pTempBuffer = new VoxelType[m_uSideLength * m_uSideLength * m_uSideLength];
 
 		// We should prehaps restructure this loop. From: https://fgiesen.wordpress.com/2011/01/17/texture-tiling-and-swizzling/
@@ -186,16 +191,21 @@ namespace PolyVox
 			}
 		}
 
-		std::memcpy(m_tData, pTempBuffer, getDataSizeInBytes());
+		{
+			AutoUpgradeLock writeLock(lock);
+			std::memcpy(m_tData, pTempBuffer, getDataSizeInBytes());
+		}
 
 		delete[] pTempBuffer;
 	}
 
 	// Like the above function, this is provided fot easing backwards compatibility. In Cubiquity we have some
 	// old databases which use linear ordering, and we need to continue to save such data in linear order.
-	template <typename VoxelType, typename ChunkCacheType>
-	void PagedVolume<VoxelType, ChunkCacheType>::Chunk::changeMortonOrderingToLinear(void)
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk::changeMortonOrderingToLinear(void)
 	{
+		AutoReadLock lock(this);
+
 		VoxelType* pTempBuffer = new VoxelType[m_uSideLength * m_uSideLength * m_uSideLength];
 		for (uint16_t z = 0; z < m_uSideLength; z++)
 		{
@@ -210,9 +220,48 @@ namespace PolyVox
 			}
 		}
 
-		std::memcpy(m_tData, pTempBuffer, getDataSizeInBytes());
+		{
+			AutoUpgradeLock lock(this);
+			std::memcpy(m_tData, pTempBuffer, getDataSizeInBytes());
+		}
 
 		delete[] pTempBuffer;
+	}
+
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk::readLock() const
+	{
+		m_lock.readLock();
+	}
+
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk::readUnlock() const
+	{
+		m_lock.readUnlock();
+	}
+
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk::writeLock() const
+	{
+		m_lock.writeLock();
+	}
+
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk::writeUnlock() const
+	{
+		m_lock.writeUnlock();
+	}
+
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk::upgradeLock() const
+	{
+		m_lock.upgradeLock();
+	}
+
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk::downgradeLock() const
+	{
+		m_lock.downgradeLock();
 	}
 
 	template <typename VolumeType>

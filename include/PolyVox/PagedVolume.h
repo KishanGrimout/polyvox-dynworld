@@ -64,6 +64,51 @@ namespace PolyVox
 		const void* m_pVolume = nullptr;
 	};
 
+	class DummyRWLock
+	{
+	public:
+		void readLock() {}
+		void readUnlock() {}
+		void writeLock() {}
+		void writeUnlock() {}
+		void upgradeLock() {}
+		void downgradeLock() {}
+
+		template <typename T> static T postIncr(T value) { return value++; }
+		template <typename T> static T preIncr(T value)  { return ++value; }
+		template <typename T> static T postDecr(T value) { return value--; }
+		template <typename T> static T preDecr(T value)  { return --value; }
+	};
+
+	template <typename AutoReadLockType>
+	class AutoUpgradeLock
+	{
+		AutoReadLockType& m_readLock;
+	public:
+		AutoUpgradeLock(AutoReadLockType& readLock);
+		~AutoUpgradeLock();
+	};
+
+	template <typename ResourceType>
+	class AutoReadLock
+	{
+		const ResourceType* m_resource;
+	public:
+		AutoReadLock(const ResourceType* resourceToLock);
+		~AutoReadLock();
+
+		friend class AutoUpgradeLock<AutoReadLock<ResourceType>>;
+	};
+
+	template <typename ResourceType>
+	class AutoWriteLock
+	{
+		const ResourceType* m_resource;
+	public:
+		AutoWriteLock(const ResourceType* resourceToLock);
+		~AutoWriteLock();
+	};
+
 	/// The PagedVolume class provides a memory efficient method of storing voxel data while also allowing fast access and modification.
 	/// This class provide a volume implementation which avoids storing all the data in memory at all times. Instead it breaks the volume
 	/// down into a set of chunks and moves these into and out of memory on demand. This means it is much more memory efficient than the
@@ -78,7 +123,7 @@ namespace PolyVox
 	/// A consequence of this paging approach is that (unlike the RawVolume) the PagedVolume does not need to have a predefined size. After
 	/// the volume has been created you can begin acessing voxels anywhere in space and the required data will be created automatically.
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType, typename ChunkCacheType = DefaultChunkCache>
+	template <typename VoxelType, typename ChunkCacheType = DefaultChunkCache, typename RWLockType = DummyRWLock>
 	class PagedVolume : public BaseVolume<VoxelType>
 	{
 	public:
@@ -107,6 +152,13 @@ namespace PolyVox
 			void changeLinearOrderingToMorton(void);
 			void changeMortonOrderingToLinear(void);
 
+			void readLock() const;
+			void readUnlock() const;
+			void writeLock() const;
+			void writeUnlock() const;
+			void upgradeLock() const;
+			void downgradeLock() const;
+
 		private:
 			/// Private copy constructor to prevent accisdental copying
 			Chunk(const Chunk& /*rhs*/) {};
@@ -114,23 +166,27 @@ namespace PolyVox
 			/// Private assignment operator to prevent accisdental copying
 			Chunk& operator=(const Chunk& /*rhs*/) {};
 
+			uint32_t calculateSizeInBytes(void);
+			static uint32_t calculateSizeInBytes(uint32_t uSideLength);
+
+			VoxelType* m_tData;
+
+			Pager* m_pPager;
+
 			// This is updated by the PagedVolume and used to discard the least recently used chunks.
 			uint32_t m_uChunkLastAccessed;
+
+			uint16_t m_uSideLength;
+			uint8_t m_uSideLengthPower;
 
 			// This is so we can tell whether a uncompressed chunk has to be recompressed and whether
 			// a compressed chunk has to be paged back to disk, or whether they can just be discarded.
 			bool m_bDataModified;
 
-			uint32_t calculateSizeInBytes(void);
-			static uint32_t calculateSizeInBytes(uint32_t uSideLength);
-
-			VoxelType* m_tData;
-			uint16_t m_uSideLength;
-			uint8_t m_uSideLengthPower;
-			Pager* m_pPager;
-
 			// Note: Do we really need to store this position here as well as in the block maps?
 			Vector3DInt32 m_v3dChunkSpacePosition;
+
+			mutable RWLockType m_lock;
 		};
 
 		/**
@@ -156,16 +212,16 @@ namespace PolyVox
 		//option. For now it seems best to 'fix' it with the preprocessor insstead, but maybe the workaround can be reinstated
 		//in the future
 		//typedef Volume<VoxelType> VolumeOfVoxelType; //Workaround for GCC/VS2010 differences.
-		//class Sampler : public VolumeOfVoxelType::template Sampler< PagedVolume<VoxelType, ChunkCacheType> >
+		//class Sampler : public VolumeOfVoxelType::template Sampler< PagedVolume<VoxelType, ChunkCacheType, RWLockType> >
 #ifndef SWIG
 #if defined(_MSC_VER)
-		class Sampler : public BaseVolume<VoxelType>::Sampler< PagedVolume<VoxelType, ChunkCacheType> > //This line works on VS2010
+		class Sampler : public BaseVolume<VoxelType>::Sampler< PagedVolume<VoxelType, ChunkCacheType, RWLockType> > //This line works on VS2010
 #else
 		class Sampler : public BaseVolume<VoxelType>::template Sampler< PagedVolume<VoxelTyp, ChunkCacheTypee> > //This line works on GCC
 #endif
 		{
 		public:
-			Sampler(PagedVolume<VoxelType, ChunkCacheType>* volume);
+			Sampler(PagedVolume<VoxelType, ChunkCacheType, RWLockType>* volume);
 			~Sampler();
 
 			inline VoxelType getVoxel(void) const;
@@ -252,6 +308,13 @@ namespace PolyVox
 		/// Calculates approximatly how many bytes of memory the volume is currently using.
 		uint32_t calculateSizeInBytes(void);
 
+		void readLock() const;
+		void readUnlock() const;
+		void writeLock() const;
+		void writeUnlock() const;
+		void upgradeLock() const;
+		void downgradeLock() const;
+
 	protected:
 		/// Copy constructor
 		PagedVolume(const PagedVolume& rhs);
@@ -285,7 +348,9 @@ namespace PolyVox
 
 		Pager* m_pPager = nullptr;
 
-		typedef PagedVolume<VoxelType, ChunkCacheType> _Myt;
+		mutable RWLockType m_lock;
+
+		typedef PagedVolume<VoxelType, ChunkCacheType, RWLockType> _Myt;
 	};
 
 }

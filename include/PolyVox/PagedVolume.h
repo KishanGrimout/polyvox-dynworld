@@ -74,10 +74,10 @@ namespace PolyVox
 		void upgradeLock() {}
 		void downgradeLock() {}
 
-		template <typename T> static T postIncr(T value) { return value++; }
-		template <typename T> static T preIncr(T value)  { return ++value; }
-		template <typename T> static T postDecr(T value) { return value--; }
-		template <typename T> static T preDecr(T value)  { return --value; }
+		template <typename T> static T postIncr(T& value) { return value++; }
+		template <typename T> static T preIncr(T& value)  { return ++value; }
+		template <typename T> static T postDecr(T& value) { return value--; }
+		template <typename T> static T preDecr(T& value)  { return --value; }
 	};
 
 	template <typename AutoReadLockType>

@@ -284,6 +284,26 @@ namespace PolyVox
 
 #endif // SWIG
 
+		class AutoReadLockRegion
+		{
+			const PagedVolume<VoxelType, ChunkCacheType, RWLockType>* m_volume;
+			const Region& m_region;
+
+		public:
+			AutoReadLockRegion(const PagedVolume<VoxelType, ChunkCacheType, RWLockType>* volume, const Region& region);
+			~AutoReadLockRegion();
+		};
+
+		class AutoWriteLockRegion
+		{
+			const PagedVolume<VoxelType, ChunkCacheType, RWLockType>* m_volume;
+			const Region& m_region;
+
+		public:
+			AutoWriteLockRegion(const PagedVolume<VoxelType, ChunkCacheType, RWLockType>* volume, const Region& region);
+			~AutoWriteLockRegion();
+		};
+
 	public:
 		/// Constructor for creating a fixed size volume.
 		PagedVolume(Pager* pPager, uint32_t uTargetMemoryUsageInBytes = 256 * 1024 * 1024, uint16_t uChunkSideLength = 32);
@@ -301,7 +321,7 @@ namespace PolyVox
 		void setVoxel(const Vector3DInt32& v3dPos, VoxelType tValue);
 
 		/// Tries to ensure that the voxels within the specified Region are loaded into memory.
-		void prefetch(Region regPrefetch);
+		void prefetch(const Region& regPrefetch);
 		/// Removes all voxels from memory
 		void flushAll();
 
@@ -315,6 +335,11 @@ namespace PolyVox
 		void upgradeLock() const;
 		void downgradeLock() const;
 
+		void readLockRegion(const Region& region);
+		void readUnlockRegion(const Region& region);
+		void writeLockRegion(const Region& region);
+		void writeUnlockRegion(const Region& region);
+
 	protected:
 		/// Copy constructor
 		PagedVolume(const PagedVolume& rhs);
@@ -323,6 +348,7 @@ namespace PolyVox
 		PagedVolume& operator=(const PagedVolume& rhs);
 
 	private:
+		void applyOnChunks(const Region& region, std::function<void(Chunk*)> operation);
 		Chunk* getChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const;
 
 		mutable ChunkCacheType m_tChunkCache;

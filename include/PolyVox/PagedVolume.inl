@@ -224,38 +224,9 @@ namespace PolyVox
 	/// \param regPrefetch The Region of voxels to prefetch into memory.
 	////////////////////////////////////////////////////////////////////////////////
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::prefetch(Region regPrefetch)
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::prefetch(const Region& regPrefetch)
 	{
-		// Convert the start and end positions into chunk space coordinates
-		Vector3DInt32 v3dStart;
-		for (int i = 0; i < 3; i++)
-		{
-			v3dStart.setElement(i, regPrefetch.getLowerCorner().getElement(i) >> m_uChunkSideLengthPower);
-		}
-
-		Vector3DInt32 v3dEnd;
-		for (int i = 0; i < 3; i++)
-		{
-			v3dEnd.setElement(i, regPrefetch.getUpperCorner().getElement(i) >> m_uChunkSideLengthPower);
-		}
-
-		// Ensure we don't page in more chunks than the volume can hold.
-		Region region(v3dStart, v3dEnd);
-		uint32_t uNoOfChunks = static_cast<uint32_t>(region.getWidthInVoxels() * region.getHeightInVoxels() * region.getDepthInVoxels());
-		POLYVOX_LOG_WARNING_IF(uNoOfChunks > m_uChunkCountLimit, "Attempting to prefetch more than the maximum number of chunks (this will cause thrashing).");
-		uNoOfChunks = (std::min)(uNoOfChunks, m_uChunkCountLimit);
-
-		// Loops over the specified positions and touch the corresponding chunks.
-		for (int32_t x = v3dStart.getX(); x <= v3dEnd.getX(); x++)
-		{
-			for (int32_t y = v3dStart.getY(); y <= v3dEnd.getY(); y++)
-			{
-				for (int32_t z = v3dStart.getZ(); z <= v3dEnd.getZ(); z++)
-				{
-					getChunk(x, y, z);
-				}
-			}
-		}
+		applyOnChunks(regPrefetch, [](Chunk* chunk) { /* Nothing to do, just touch the chunks */ });
 	}
 
 	////////////////////////////////////////////////////////////////////////////////
@@ -273,6 +244,41 @@ namespace PolyVox
 		for (uint32_t uIndex = 0; uIndex < uChunkArraySize; uIndex++)
 		{
 			m_arrayChunks[uIndex] = nullptr;
+		}
+	}
+
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::applyOnChunks(const Region& region, std::function<void(Chunk*)> operation)
+	{
+		// Convert the start and end positions into chunk space coordinates
+		Vector3DInt32 v3dStart;
+		for (int i = 0; i < 3; i++)
+		{
+			v3dStart.setElement(i, region.getLowerCorner().getElement(i) >> m_uChunkSideLengthPower);
+		}
+
+		Vector3DInt32 v3dEnd;
+		for (int i = 0; i < 3; i++)
+		{
+			v3dEnd.setElement(i, region.getUpperCorner().getElement(i) >> m_uChunkSideLengthPower);
+		}
+
+		// Ensure we don't page in more chunks than the volume can hold.
+		Region region(v3dStart, v3dEnd);
+		uint32_t uNoOfChunks = static_cast<uint32_t>(region.getWidthInVoxels() * region.getHeightInVoxels() * region.getDepthInVoxels());
+		POLYVOX_LOG_WARNING_IF(uNoOfChunks > m_uChunkCountLimit, "Attempting to prefetch more than the maximum number of chunks (this will cause thrashing).");
+		uNoOfChunks = (std::min)(uNoOfChunks, m_uChunkCountLimit);
+
+		// Loops over the specified positions and touch the corresponding chunks.
+		for (int32_t x = v3dStart.getX(); x <= v3dEnd.getX(); x++)
+		{
+			for (int32_t y = v3dStart.getY(); y <= v3dEnd.getY(); y++)
+			{
+				for (int32_t z = v3dStart.getZ(); z <= v3dEnd.getZ(); z++)
+				{
+					operation(getChunk(x, y, z));
+				}
+			}
 		}
 	}
 
@@ -438,6 +444,56 @@ namespace PolyVox
 	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::downgradeLock() const
 	{
 		m_lock.downgradeLock();
+	}
+
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::readLockRegion(const Region& region)
+	{
+		applyOnChunks(region, [this](Chunk* chunk) { chunk->readLock(); });
+	}
+
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::readUnlockRegion(const Region& region)
+	{
+		applyOnChunks(region, [this](Chunk* chunk) { chunk->readUnlock(); });
+	}
+
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::writeLockRegion(const Region& region)
+	{
+		applyOnChunks(region, [this](Chunk* chunk) { chunk->writeLock(); });
+	}
+
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::writeUnlockRegion(const Region& region)
+	{
+		applyOnChunks(region, [this](Chunk* chunk) { chunk->writeUnlock(); });
+	}
+
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	PagedVolume<VoxelType, ChunkCacheType, RWLockType>::AutoReadLockRegion::AutoReadLockRegion(const _Myt* volume, const Region& region)
+		: m_volume(volume), m_region(region)
+	{
+		m_volume->readLockRegion(m_region);
+	}
+
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	PagedVolume<VoxelType, ChunkCacheType, RWLockType>::AutoReadLockRegion::~AutoReadLockRegion()
+	{
+		m_volume->readUnlockRegion(m_region);
+	}
+
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	PagedVolume<VoxelType, ChunkCacheType, RWLockType>::AutoWriteLockRegion::AutoWriteLockRegion(const _Myt* volume, const Region& region)
+		: m_volume(volume), m_region(region)
+	{
+		m_volume->writeLockRegion(m_region);
+	}
+
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	PagedVolume<VoxelType, ChunkCacheType, RWLockType>::AutoWriteLockRegion::~AutoWriteLockRegion()
+	{
+		m_volume->writeUnlockRegion(m_region);
 	}
 }
 

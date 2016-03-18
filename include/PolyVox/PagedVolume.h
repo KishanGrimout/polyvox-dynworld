@@ -335,10 +335,10 @@ namespace PolyVox
 		void upgradeLock() const;
 		void downgradeLock() const;
 
-		void readLockRegion(const Region& region);
-		void readUnlockRegion(const Region& region);
-		void writeLockRegion(const Region& region);
-		void writeUnlockRegion(const Region& region);
+		void readLockRegion(const Region& region) const;
+		void readUnlockRegion(const Region& region) const;
+		void writeLockRegion(const Region& region) const;
+		void writeUnlockRegion(const Region& region) const;
 
 	protected:
 		/// Copy constructor
@@ -348,7 +348,7 @@ namespace PolyVox
 		PagedVolume& operator=(const PagedVolume& rhs);
 
 	private:
-		void applyOnChunks(const Region& region, std::function<void(Chunk*)> operation);
+		void applyOnChunks(const Region& region, std::function<void(Chunk*)> operation) const;
 		Chunk* getChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const;
 
 		mutable ChunkCacheType m_tChunkCache;

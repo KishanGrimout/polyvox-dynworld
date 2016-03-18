@@ -248,7 +248,7 @@ namespace PolyVox
 	}
 
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::applyOnChunks(const Region& region, std::function<void(Chunk*)> operation)
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::applyOnChunks(const Region& region, std::function<void(Chunk*)> operation) const
 	{
 		// Convert the start and end positions into chunk space coordinates
 		Vector3DInt32 v3dStart;
@@ -447,25 +447,25 @@ namespace PolyVox
 	}
 
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::readLockRegion(const Region& region)
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::readLockRegion(const Region& region) const
 	{
 		applyOnChunks(region, [this](Chunk* chunk) { chunk->readLock(); });
 	}
 
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::readUnlockRegion(const Region& region)
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::readUnlockRegion(const Region& region) const
 	{
 		applyOnChunks(region, [this](Chunk* chunk) { chunk->readUnlock(); });
 	}
 
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::writeLockRegion(const Region& region)
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::writeLockRegion(const Region& region) const
 	{
 		applyOnChunks(region, [this](Chunk* chunk) { chunk->writeLock(); });
 	}
 
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::writeUnlockRegion(const Region& region)
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::writeUnlockRegion(const Region& region) const
 	{
 		applyOnChunks(region, [this](Chunk* chunk) { chunk->writeUnlock(); });
 	}

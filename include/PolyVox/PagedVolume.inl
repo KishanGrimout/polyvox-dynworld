@@ -283,21 +283,9 @@ namespace PolyVox
 	}
 
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	typename PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk* PagedVolume<VoxelType, ChunkCacheType, RWLockType>::getChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const
+	typename PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk* PagedVolume<VoxelType, ChunkCacheType, RWLockType>::getExistingChunk(uint32_t iPosisionHash, int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const
 	{
 		Chunk* pChunk = nullptr;
-
-		// We generate a 16-bit hash here and assume this matches the range available in the chunk
-		// array. The assert here is just to make sure we take care if change this in the future.
-		static_assert(uChunkArraySize == 65536, "Chunk array size has changed, check if the hash calculation needs updating.");
-		// Extract the lower five bits from each position component.
-		const uint32_t uChunkXLowerBits = static_cast<uint32_t>(uChunkX & 0x1F);
-		const uint32_t uChunkYLowerBits = static_cast<uint32_t>(uChunkY & 0x1F);
-		const uint32_t uChunkZLowerBits = static_cast<uint32_t>(uChunkZ & 0x1F);
-		// Combine then to form a 15-bit hash of the position. Also shift by one to spread the values out in the whole 16-bit space.
-		const uint32_t iPosisionHash = (((uChunkXLowerBits)) | ((uChunkYLowerBits) << 5) | ((uChunkZLowerBits) << 10) << 1);
-
-		AutoReadLock<_Myt> lock(this);
 
 		// Starting at the position indicated by the hash, and then search through the whole array looking for a chunk with the correct
 		// position. In most cases we expect to find it in the first place we look. Note that this algorithm is slow in the case that
@@ -312,8 +300,6 @@ namespace PolyVox
 				if (entryPos.getX() == uChunkX && entryPos.getY() == uChunkY && entryPos.getZ() == uChunkZ)
 				{
 					pChunk = m_arrayChunks[iIndex].get();
-
-					AutoWriteLock<_Myt::Chunk> lock(pChunk);
 					pChunk->m_uChunkLastAccessed = RWLockType::preIncr(m_uTimestamper);
 					break;
 				}
@@ -323,63 +309,101 @@ namespace PolyVox
 			iIndex %= uChunkArraySize;
 		} while (iIndex != iPosisionHash); // Keep searching until we get back to our start position.
 
-		// If we still haven't found the chunk then it's time to create a new one and page it in from disk.
+		return pChunk;
+	}
+
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	typename PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk* PagedVolume<VoxelType, ChunkCacheType, RWLockType>::getChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const
+	{
+		Chunk* pChunk = nullptr;
+
+		// We generate a 16-bit hash here and assume this matches the range available in the chunk
+		// array. The assert here is just to make sure we take care if change this in the future.
+		static_assert(uChunkArraySize == 65536, "Chunk array size has changed, check if the hash calculation needs updating.");
+		// Extract the lower five bits from each position component.
+		const uint32_t uChunkXLowerBits = static_cast<uint32_t>(uChunkX & 0x1F);
+		const uint32_t uChunkYLowerBits = static_cast<uint32_t>(uChunkY & 0x1F);
+		const uint32_t uChunkZLowerBits = static_cast<uint32_t>(uChunkZ & 0x1F);
+		// Combine then to form a 15-bit hash of the position. Also shift by one to spread the values out in the whole 16-bit space.
+		const uint32_t iPosisionHash = (((uChunkXLowerBits)) | ((uChunkYLowerBits) << 5) | ((uChunkZLowerBits) << 10) << 1);
+
+		{ // First try to get the chunk in read-only mode
+			AutoReadLock<_Myt> lock(this);
+			pChunk = getExistingChunk(iPosisionHash, uChunkX, uChunkY, uChunkZ);
+		}
+
 		if (!pChunk)
 		{
 			// The chunk was not found so we will create a new one.
+			// It may be generated several times at the same time as we are still under read-only lock. This is a trade-off to avoid locking
+			// the volume during the creation of the chunk, which can be long. The first one to reach the exclusive lock below will register
+			// its chunk, while other threads will discard it. This situation should be rare enough though.
 			Vector3DInt32 v3dChunkPos(uChunkX, uChunkY, uChunkZ);
-			pChunk = new _Myt::Chunk(v3dChunkPos, m_uChunkSideLength, m_pPager);
-			pChunk->m_uChunkLastAccessed = RWLockType::preIncr(m_uTimestamper); // Important, as we may soon delete the oldest chunk
+			Chunk* pNewChunk = new _Myt::Chunk(v3dChunkPos, m_uChunkSideLength, m_pPager);
 
-			// Store the chunk at the appropriate place in out chunk array. Ideally this place is
-			// given by the hash, otherwise we do a linear search for the next available location
-			// We always expect to find a free place because we aim to keep the array only half full.
-			uint32_t iIndex = iPosisionHash;
-			bool bInsertedSucessfully = false;
-			do
+			// If the chunk was not found, attempt to get it with exclusive lock in case one create it in the meantime
+			AutoWriteLock<_Myt> writeLock(this);
+			pChunk = getExistingChunk(iPosisionHash, uChunkX, uChunkY, uChunkZ);
+
+			// If we still haven't found the chunk then it's time to use the one we created.
+			if (!pChunk)
 			{
-				if (m_arrayChunks[iIndex] == nullptr)
+				pChunk = pNewChunk;
+				pChunk->m_uChunkLastAccessed = RWLockType::preIncr(m_uTimestamper); // Important, as we may soon delete the oldest chunk
+
+				// Store the chunk at the appropriate place in out chunk array. Ideally this place is
+				// given by the hash, otherwise we do a linear search for the next available location
+				// We always expect to find a free place because we aim to keep the array only half full.
+				uint32_t iIndex = iPosisionHash;
+				bool bInsertedSucessfully = false;
+				do
 				{
-					AutoUpgradeLock<AutoReadLock<_Myt>> writeLock(lock);
-					m_arrayChunks[iIndex] = std::move(std::unique_ptr< Chunk >(pChunk));
-					bInsertedSucessfully = true;
-					break;
-				}
-
-				iIndex++;
-				iIndex %= uChunkArraySize;
-			} while (iIndex != iPosisionHash); // Keep searching until we get back to our start position.
-
-			// This should never really happen unless we are failing to keep our number of active chunks
-			// significantly under the target amount. Perhaps if chunks are 'pinned' for threading purposes?
-			POLYVOX_THROW_IF(!bInsertedSucessfully, std::logic_error, "No space in chunk array for new chunk.");
-
-			// As we have added a chunk we may have exceeded our target chunk limit. Search through the array to
-			// determine how many chunks we have, as well as finding the oldest timestamp. Note that this is potentially
-			// wasteful and we may instead wish to track how many chunks we have and/or delete a chunk at random (or
-			// just check e.g. 10 and delete the oldest of those) but we'll see if this is a bottleneck first. Paging
-			// the data in is probably more expensive.
-			uint32_t uChunkCount = 0;
-			uint32_t uOldestChunkIndex = 0;
-			uint32_t uOldestChunkTimestamp = std::numeric_limits<uint32_t>::max();
-			for (uint32_t uIndex = 0; uIndex < uChunkArraySize; uIndex++)
-			{
-				if (m_arrayChunks[uIndex])
-				{
-					uChunkCount++;
-					if (m_arrayChunks[uIndex]->m_uChunkLastAccessed < uOldestChunkTimestamp)
+					if (m_arrayChunks[iIndex] == nullptr)
 					{
-						uOldestChunkTimestamp = m_arrayChunks[uIndex]->m_uChunkLastAccessed;
-						uOldestChunkIndex = uIndex;
+						m_arrayChunks[iIndex] = std::move(std::unique_ptr< Chunk >(pChunk));
+						bInsertedSucessfully = true;
+						break;
+					}
+
+					iIndex++;
+					iIndex %= uChunkArraySize;
+				} while (iIndex != iPosisionHash); // Keep searching until we get back to our start position.
+
+				// This should never really happen unless we are failing to keep our number of active chunks
+				// significantly under the target amount. Perhaps if chunks are 'pinned' for threading purposes?
+				POLYVOX_THROW_IF(!bInsertedSucessfully, std::logic_error, "No space in chunk array for new chunk.");
+
+				// As we have added a chunk we may have exceeded our target chunk limit. Search through the array to
+				// determine how many chunks we have, as well as finding the oldest timestamp. Note that this is potentially
+				// wasteful and we may instead wish to track how many chunks we have and/or delete a chunk at random (or
+				// just check e.g. 10 and delete the oldest of those) but we'll see if this is a bottleneck first. Paging
+				// the data in is probably more expensive.
+				uint32_t uChunkCount = 0;
+				uint32_t uOldestChunkIndex = 0;
+				uint32_t uOldestChunkTimestamp = std::numeric_limits<uint32_t>::max();
+				for (uint32_t uIndex = 0; uIndex < uChunkArraySize; uIndex++)
+				{
+					if (m_arrayChunks[uIndex])
+					{
+						uChunkCount++;
+						if (m_arrayChunks[uIndex]->m_uChunkLastAccessed < uOldestChunkTimestamp)
+						{
+							uOldestChunkTimestamp = m_arrayChunks[uIndex]->m_uChunkLastAccessed;
+							uOldestChunkIndex = uIndex;
+						}
 					}
 				}
-			}
 
-			// Check if we have too many chunks, and delete the oldest if so.
-			if (uChunkCount > m_uChunkCountLimit)
+				// Check if we have too many chunks, and delete the oldest if so.
+				if (uChunkCount > m_uChunkCountLimit)
+				{
+					m_arrayChunks[uOldestChunkIndex] = nullptr;
+				}
+			}
+			else
 			{
-				AutoUpgradeLock<AutoReadLock<_Myt>> writeLock(lock);
-				m_arrayChunks[uOldestChunkIndex] = nullptr;
+				delete pNewChunk;
+				pNewChunk = nullptr;
 			}
 		}
 

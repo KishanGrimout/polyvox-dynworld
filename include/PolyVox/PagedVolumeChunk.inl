@@ -143,6 +143,12 @@ namespace PolyVox
 	}
 
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
+	bool PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk::getDataModified() const
+	{
+		return m_bDataModified;
+	}
+
+	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
 	uint32_t PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk::calculateSizeInBytes(void)
 	{
 		// Call through to the static version

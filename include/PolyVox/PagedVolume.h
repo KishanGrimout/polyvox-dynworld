@@ -149,6 +149,8 @@ namespace PolyVox
 			void setVoxel(uint32_t uXPos, uint32_t uYPos, uint32_t uZPos, VoxelType tValue);
 			void setVoxel(const Vector3DUint16& v3dPos, VoxelType tValue);
 
+			bool getDataModified() const;
+
 			void changeLinearOrderingToMorton(void);
 			void changeMortonOrderingToLinear(void);
 
@@ -350,6 +352,7 @@ namespace PolyVox
 	private:
 		void applyOnChunks(const Region& region, std::function<void(Chunk*)> operation) const;
 		Chunk* getChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const;
+		Chunk* getExistingChunk(uint32_t iPosisionHash, int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const;
 
 		mutable ChunkCacheType m_tChunkCache;
 

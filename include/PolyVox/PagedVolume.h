@@ -67,12 +67,12 @@ namespace PolyVox
 	class DummyRWLock
 	{
 	public:
-		void readLock() {}
-		void readUnlock() {}
-		void writeLock() {}
-		void writeUnlock() {}
-		void upgradeLock() {}
-		void downgradeLock() {}
+		void readLock() const {}
+		void readUnlock() const {}
+		void writeLock() const {}
+		void writeUnlock() const {}
+		void upgradeLock() const {}
+		void downgradeLock() const {}
 
 		template <typename T> static T postIncr(T& value) { return value++; }
 		template <typename T> static T preIncr(T& value)  { return ++value; }
@@ -377,7 +377,8 @@ namespace PolyVox
 
 		Pager* m_pPager = nullptr;
 
-		mutable RWLockType m_lock;
+		mutable RWLockType m_volumeLock;
+		mutable RWLockType m_internalLock;
 
 		typedef PagedVolume<VoxelType, ChunkCacheType, RWLockType> _Myt;
 	};

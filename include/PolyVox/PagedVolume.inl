@@ -235,10 +235,10 @@ namespace PolyVox
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
 	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::flushAll()
 	{
-		AutoWriteLock<_Myt> lock(this);
-
 		// Clear chunk cache as all chunks are about to be removed.
 		m_tChunkCache.dirtyCache();
+
+		AutoWriteLock<RWLockType> lock(&m_internalLock);
 
 		// Erase all the most recently used chunks.
 		for (uint32_t uIndex = 0; uIndex < uChunkArraySize; uIndex++)
@@ -328,7 +328,7 @@ namespace PolyVox
 		const uint32_t iPosisionHash = (((uChunkXLowerBits)) | ((uChunkYLowerBits) << 5) | ((uChunkZLowerBits) << 10) << 1);
 
 		{ // First try to get the chunk in read-only mode
-			AutoReadLock<_Myt> lock(this);
+			AutoReadLock<RWLockType> lock(&m_internalLock);
 			pChunk = getExistingChunk(iPosisionHash, uChunkX, uChunkY, uChunkZ);
 		}
 
@@ -342,7 +342,7 @@ namespace PolyVox
 			Chunk* pNewChunk = new _Myt::Chunk(v3dChunkPos, m_uChunkSideLength, m_pPager);
 
 			// If the chunk was not found, attempt to get it with exclusive lock in case one create it in the meantime
-			AutoWriteLock<_Myt> writeLock(this);
+			AutoWriteLock<RWLockType> writeLock(&m_internalLock);
 			pChunk = getExistingChunk(iPosisionHash, uChunkX, uChunkY, uChunkZ);
 
 			// If we still haven't found the chunk then it's time to use the one we created.
@@ -418,7 +418,7 @@ namespace PolyVox
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
 	uint32_t PagedVolume<VoxelType, ChunkCacheType, RWLockType>::calculateSizeInBytes(void)
 	{
-		AutoReadLock lock(this);
+		AutoReadLock<RWLockType> lock(&m_internalLock);
 
 		uint32_t uChunkCount = 0;
 		for (uint32_t uIndex = 0; uIndex < uChunkArraySize; uIndex++)
@@ -437,37 +437,37 @@ namespace PolyVox
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
 	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::readLock() const
 	{
-		m_lock.readLock();
+		m_volumeLock.readLock();
 	}
 
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
 	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::readUnlock() const
 	{
-		m_lock.readUnlock();
+		m_volumeLock.readUnlock();
 	}
 
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
 	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::writeLock() const
 	{
-		m_lock.writeLock();
+		m_volumeLock.writeLock();
 	}
 
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
 	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::writeUnlock() const
 	{
-		m_lock.writeUnlock();
+		m_volumeLock.writeUnlock();
 	}
 
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
 	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::upgradeLock() const
 	{
-		m_lock.upgradeLock();
+		m_volumeLock.upgradeLock();
 	}
 
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
 	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::downgradeLock() const
 	{
-		m_lock.downgradeLock();
+		m_volumeLock.downgradeLock();
 	}
 
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>

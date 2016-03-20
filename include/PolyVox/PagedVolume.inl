@@ -283,9 +283,9 @@ namespace PolyVox
 	}
 
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	typename PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk* PagedVolume<VoxelType, ChunkCacheType, RWLockType>::getExistingChunk(uint32_t iPosisionHash, int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const
+	std::shared_ptr<typename PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk> PagedVolume<VoxelType, ChunkCacheType, RWLockType>::getExistingChunk(uint32_t iPosisionHash, int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const
 	{
-		Chunk* pChunk = nullptr;
+		std::shared_ptr<Chunk> pChunk;
 
 		// Starting at the position indicated by the hash, and then search through the whole array looking for a chunk with the correct
 		// position. In most cases we expect to find it in the first place we look. Note that this algorithm is slow in the case that
@@ -299,7 +299,7 @@ namespace PolyVox
 				Vector3DInt32& entryPos = m_arrayChunks[iIndex]->m_v3dChunkSpacePosition;
 				if (entryPos.getX() == uChunkX && entryPos.getY() == uChunkY && entryPos.getZ() == uChunkZ)
 				{
-					pChunk = m_arrayChunks[iIndex].get();
+					pChunk = m_arrayChunks[iIndex];
 					pChunk->m_uChunkLastAccessed = RWLockType::preIncr(m_uTimestamper);
 					break;
 				}
@@ -315,7 +315,7 @@ namespace PolyVox
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
 	typename PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk* PagedVolume<VoxelType, ChunkCacheType, RWLockType>::getChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const
 	{
-		Chunk* pChunk = nullptr;
+		std::shared_ptr<Chunk> pChunk;
 
 		// We generate a 16-bit hash here and assume this matches the range available in the chunk
 		// array. The assert here is just to make sure we take care if change this in the future.
@@ -339,7 +339,7 @@ namespace PolyVox
 			// the volume during the creation of the chunk, which can be long. The first one to reach the exclusive lock below will register
 			// its chunk, while other threads will discard it. This situation should be rare enough though.
 			Vector3DInt32 v3dChunkPos(uChunkX, uChunkY, uChunkZ);
-			Chunk* pNewChunk = new _Myt::Chunk(v3dChunkPos, m_uChunkSideLength, m_pPager);
+			std::shared_ptr<Chunk> pNewChunk = std::make_shared<Chunk>(v3dChunkPos, m_uChunkSideLength, m_pPager);
 
 			// If the chunk was not found, attempt to get it with exclusive lock in case one create it in the meantime
 			AutoWriteLock<RWLockType> writeLock(&m_internalLock);
@@ -360,7 +360,7 @@ namespace PolyVox
 				{
 					if (m_arrayChunks[iIndex] == nullptr)
 					{
-						m_arrayChunks[iIndex] = std::move(std::unique_ptr< Chunk >(pChunk));
+						m_arrayChunks[iIndex] = pChunk;
 						bInsertedSucessfully = true;
 						break;
 					}
@@ -402,14 +402,13 @@ namespace PolyVox
 			}
 			else
 			{
-				delete pNewChunk;
 				pNewChunk = nullptr;
 			}
 		}
 
 		m_tChunkCache.setChunkCached<_Myt>(this, pChunk, uChunkX, uChunkY, uChunkZ);
 
-		return pChunk;	
+		return pChunk.get();
 	}
 
 	////////////////////////////////////////////////////////////////////////////////

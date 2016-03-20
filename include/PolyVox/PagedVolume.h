@@ -352,7 +352,7 @@ namespace PolyVox
 	private:
 		void applyOnChunks(const Region& region, std::function<void(Chunk*)> operation) const;
 		Chunk* getChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const;
-		Chunk* getExistingChunk(uint32_t iPosisionHash, int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const;
+		std::shared_ptr<Chunk> getExistingChunk(uint32_t iPosisionHash, int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const;
 
 		mutable ChunkCacheType m_tChunkCache;
 
@@ -368,7 +368,7 @@ namespace PolyVox
 		// be slightly faster (probably due to the extra pointer indirection in a vector?) and the actual size of this array should
 		// just be 1Mb or so.
 		static const uint32_t uChunkArraySize = 65536;
-		mutable std::unique_ptr< Chunk > m_arrayChunks[uChunkArraySize];
+		mutable std::shared_ptr< Chunk > m_arrayChunks[uChunkArraySize];
 
 		// The size of the chunks
 		uint16_t m_uChunkSideLength;

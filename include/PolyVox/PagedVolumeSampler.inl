@@ -86,10 +86,11 @@ namespace PolyVox
 
 		uint32_t uVoxelIndexInChunk = morton256_x[m_uXPosInChunk] | morton256_y[m_uYPosInChunk] | morton256_z[m_uZPosInChunk];
 
-		auto pCurrentChunk = this->mVolume->m_tChunkCache.getChunkCached<_Myt>(this->mVolume, uXChunk, uYChunk, uZChunk);
+		std::shared_ptr<Chunk> pCurrentChunk = this->mVolume->m_tChunkCache.getChunkCached<_Myt>(this->mVolume, uXChunk, uYChunk, uZChunk).lock();
 		if (pCurrentChunk == nullptr)
 			pCurrentChunk = this->mVolume->getChunk(uXChunk, uYChunk, uZChunk);
 
+		AutoReadLock<_Myt::Chunk> lock(pCurrentChunk.get());
 		mCurrentVoxel = pCurrentChunk->m_tData + uVoxelIndexInChunk;
 	}
 

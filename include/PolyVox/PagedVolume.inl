@@ -78,6 +78,8 @@ namespace PolyVox
 	PagedVolume<VoxelType, ChunkCacheType, RWLockType>::PagedVolume(Pager* pPager, uint32_t uTargetMemoryUsageInBytes, uint16_t uChunkSideLength)
 		:BaseVolume<VoxelType>()
 		, m_uChunkSideLength(uChunkSideLength)
+		, m_uChunkSideLengthPower(logBase2(uChunkSideLength)) // Used to perform multiplications and divisions by bit shifting.
+		, m_iChunkMask(uChunkSideLength - 1) // Use to perform modulo by bit operations
 		, m_pPager(pPager)
 	{
 			// Validation of parameters
@@ -87,10 +89,6 @@ namespace PolyVox
 			POLYVOX_THROW_IF(m_uChunkSideLength > 256, std::invalid_argument, "Chunk size is too large to be practical.");
 			POLYVOX_THROW_IF(!isPowerOf2(m_uChunkSideLength), std::invalid_argument, "Chunk side length must be a power of two.");
 
-			// Used to perform multiplications and divisions by bit shifting.
-			m_uChunkSideLengthPower = logBase2(m_uChunkSideLength);
-			// Use to perform modulo by bit operations
-			m_iChunkMask = m_uChunkSideLength - 1;
 
 			// Calculate the number of chunks based on the memory limit and the size of each chunk.
 			uint32_t uChunkSizeInBytes = PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk::calculateSizeInBytes(m_uChunkSideLength);
@@ -110,38 +108,12 @@ namespace PolyVox
 	}
 
 	////////////////////////////////////////////////////////////////////////////////
-	/// This function should never be called. Copying volumes by value would be expensive, and we want to prevent users from doing
-	/// it by accident (such as when passing them as paramenters to functions). That said, there are times when you really do want to
-	/// make a copy of a volume and in this case you should look at the VolumeResampler.
-	///
-	/// \sa VolumeResampler
-	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	PagedVolume<VoxelType, ChunkCacheType, RWLockType>::PagedVolume(const PagedVolume<VoxelType, ChunkCacheType, RWLockType>& /*rhs*/)
-	{
-		POLYVOX_THROW(not_implemented, "Volume copy constructor not implemented to prevent accidental copying.");
-	}
-
-	////////////////////////////////////////////////////////////////////////////////
 	/// Destroys the volume The destructor will call flushAll() to ensure that a paging volume has the chance to save it's data via the dataOverflowHandler() if desired.
 	////////////////////////////////////////////////////////////////////////////////
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
 	PagedVolume<VoxelType, ChunkCacheType, RWLockType>::~PagedVolume()
 	{
 		flushAll();
-	}
-
-	////////////////////////////////////////////////////////////////////////////////
-	/// This function should never be called. Copying volumes by value would be expensive, and we want to prevent users from doing
-	/// it by accident (such as when passing them as paramenters to functions). That said, there are times when you really do want to
-	/// make a copy of a volume and in this case you should look at the Volumeresampler.
-	///
-	/// \sa VolumeResampler
-	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	PagedVolume<VoxelType, ChunkCacheType, RWLockType>& PagedVolume<VoxelType, ChunkCacheType, RWLockType>::operator=(const PagedVolume<VoxelType, ChunkCacheType, RWLockType>& /*rhs*/)
-	{
-		POLYVOX_THROW(not_implemented, "Volume assignment operator not implemented to prevent accidental copying.");
 	}
 
 	////////////////////////////////////////////////////////////////////////////////
@@ -155,7 +127,7 @@ namespace PolyVox
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
 	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::getVoxel(int32_t uXPos, int32_t uYPos, int32_t uZPos) const
 	{
-		AutoReadLock<_Myt> lock(this);
+		AutoReadLock<_Myt> volumeLock(this);
 
 		const int32_t chunkX = uXPos >> m_uChunkSideLengthPower;
 		const int32_t chunkY = uYPos >> m_uChunkSideLengthPower;
@@ -165,10 +137,11 @@ namespace PolyVox
 		const uint16_t yOffset = static_cast<uint16_t>(uYPos & m_iChunkMask);
 		const uint16_t zOffset = static_cast<uint16_t>(uZPos & m_iChunkMask);
 
-		auto pChunk = m_tChunkCache.getChunkCached<_Myt>(this, chunkX, chunkY, chunkZ);
+		std::shared_ptr<Chunk> pChunk = m_tChunkCache.getChunkCached<_Myt>(this, chunkX, chunkY, chunkZ).lock();
 		if (pChunk == nullptr)
 			pChunk = getChunk(chunkX, chunkY, chunkZ);
 
+		AutoReadLock<_Myt::Chunk> chunkLock(pChunk.get());
 		return pChunk->getVoxel(xOffset, yOffset, zOffset);
 	}
 
@@ -192,8 +165,6 @@ namespace PolyVox
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
 	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::setVoxel(int32_t uXPos, int32_t uYPos, int32_t uZPos, VoxelType tValue)
 	{
-		AutoReadLock<_Myt> lock(this);
-
 		const int32_t chunkX = uXPos >> m_uChunkSideLengthPower;
 		const int32_t chunkY = uYPos >> m_uChunkSideLengthPower;
 		const int32_t chunkZ = uZPos >> m_uChunkSideLengthPower;
@@ -202,10 +173,11 @@ namespace PolyVox
 		const uint16_t yOffset = static_cast<uint16_t>(uYPos - (chunkY << m_uChunkSideLengthPower));
 		const uint16_t zOffset = static_cast<uint16_t>(uZPos - (chunkZ << m_uChunkSideLengthPower));
 
-		auto pChunk = m_tChunkCache.getChunkCached<_Myt>(this, chunkX, chunkY, chunkZ);
+		std::shared_ptr<Chunk> pChunk = m_tChunkCache.getChunkCached<_Myt>(this, chunkX, chunkY, chunkZ).lock();
 		if (pChunk == nullptr)
 			pChunk = getChunk(chunkX, chunkY, chunkZ);
 
+		AutoWriteLock<_Myt::Chunk> lock(pChunk.get());
 		pChunk->setVoxel(xOffset, yOffset, zOffset, tValue);
 	}
 
@@ -226,7 +198,7 @@ namespace PolyVox
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
 	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::prefetch(const Region& regPrefetch)
 	{
-		applyOnChunks(regPrefetch, [](Chunk* chunk) { /* Nothing to do, just touch the chunks */ });
+		applyOnChunks(regPrefetch, [](std::shared_ptr<Chunk> chunk) { /* Nothing to do, just touch the chunks */ });
 	}
 
 	////////////////////////////////////////////////////////////////////////////////
@@ -248,7 +220,7 @@ namespace PolyVox
 	}
 
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::applyOnChunks(const Region& region, std::function<void(Chunk*)> operation) const
+	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::applyOnChunks(const Region& region, std::function<void(std::shared_ptr<Chunk>)> operation) const
 	{
 		// Convert the start and end positions into chunk space coordinates
 		Vector3DInt32 v3dStart;
@@ -266,7 +238,7 @@ namespace PolyVox
 		// Ensure we don't page in more chunks than the volume can hold.
 		Region region(v3dStart, v3dEnd);
 		uint32_t uNoOfChunks = static_cast<uint32_t>(region.getWidthInVoxels() * region.getHeightInVoxels() * region.getDepthInVoxels());
-		POLYVOX_LOG_WARNING_IF(uNoOfChunks > m_uChunkCountLimit, "Attempting to prefetch more than the maximum number of chunks (this will cause thrashing).");
+		POLYVOX_LOG_WARNING_IF(uNoOfChunks > m_uChunkCountLimit, "Attempting to access more than the maximum number of chunks (this will cause thrashing).");
 		uNoOfChunks = (std::min)(uNoOfChunks, m_uChunkCountLimit);
 
 		// Loops over the specified positions and touch the corresponding chunks.
@@ -300,6 +272,7 @@ namespace PolyVox
 				if (entryPos.getX() == uChunkX && entryPos.getY() == uChunkY && entryPos.getZ() == uChunkZ)
 				{
 					pChunk = m_arrayChunks[iIndex];
+					AutoReadLock<_Myt::Chunk> lock(pChunk.get()); // this will also wait for this chunk to be paged in if it's in progress
 					pChunk->m_uChunkLastAccessed = RWLockType::preIncr(m_uTimestamper);
 					break;
 				}
@@ -313,7 +286,7 @@ namespace PolyVox
 	}
 
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	typename PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk* PagedVolume<VoxelType, ChunkCacheType, RWLockType>::getChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const
+	std::shared_ptr<typename PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk> PagedVolume<VoxelType, ChunkCacheType, RWLockType>::getChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const
 	{
 		std::shared_ptr<Chunk> pChunk;
 
@@ -334,81 +307,84 @@ namespace PolyVox
 
 		if (!pChunk)
 		{
-			// The chunk was not found so we will create a new one.
-			// It may be generated several times at the same time as we are still under read-only lock. This is a trade-off to avoid locking
-			// the volume during the creation of the chunk, which can be long. The first one to reach the exclusive lock below will register
-			// its chunk, while other threads will discard it. This situation should be rare enough though.
-			Vector3DInt32 v3dChunkPos(uChunkX, uChunkY, uChunkZ);
-			std::shared_ptr<Chunk> pNewChunk = std::make_shared<Chunk>(v3dChunkPos, m_uChunkSideLength, m_pPager);
-
-			// If the chunk was not found, attempt to get it with exclusive lock in case one create it in the meantime
-			AutoWriteLock<RWLockType> writeLock(&m_internalLock);
-			pChunk = getExistingChunk(iPosisionHash, uChunkX, uChunkY, uChunkZ);
-
-			// If we still haven't found the chunk then it's time to use the one we created.
-			if (!pChunk)
+			bool pageInChunk = false;
 			{
-				pChunk = pNewChunk;
-				pChunk->m_uChunkLastAccessed = RWLockType::preIncr(m_uTimestamper); // Important, as we may soon delete the oldest chunk
+				// If the chunk was not found, attempt to get it with exclusive lock in case one create it in the meantime.
+				AutoWriteLock<RWLockType> writeLock(&m_internalLock);
+				pChunk = getExistingChunk(iPosisionHash, uChunkX, uChunkY, uChunkZ);
 
-				// Store the chunk at the appropriate place in out chunk array. Ideally this place is
-				// given by the hash, otherwise we do a linear search for the next available location
-				// We always expect to find a free place because we aim to keep the array only half full.
-				uint32_t iIndex = iPosisionHash;
-				bool bInsertedSucessfully = false;
-				do
+				// If we still haven't found the chunk then it's time to create one.
+				if (!pChunk)
 				{
-					if (m_arrayChunks[iIndex] == nullptr)
+					// The chunk was not found so we will create a new one.
+					Vector3DInt32 v3dChunkPos(uChunkX, uChunkY, uChunkZ);
+					std::shared_ptr<Chunk> pNewChunk = std::make_shared<Chunk>(v3dChunkPos, m_uChunkSideLength, m_pPager);
+					pNewChunk->writeLock();
+					pageInChunk = true;
+
+					pChunk = pNewChunk;
+					pChunk->m_uChunkLastAccessed = RWLockType::preIncr(m_uTimestamper); // Important, as we may soon delete the oldest chunk
+
+					// Store the chunk at the appropriate place in out chunk array. Ideally this place is
+					// given by the hash, otherwise we do a linear search for the next available location
+					// We always expect to find a free place because we aim to keep the array only half full.
+					uint32_t iIndex = iPosisionHash;
+					bool bInsertedSucessfully = false;
+					do
 					{
-						m_arrayChunks[iIndex] = pChunk;
-						bInsertedSucessfully = true;
-						break;
-					}
-
-					iIndex++;
-					iIndex %= uChunkArraySize;
-				} while (iIndex != iPosisionHash); // Keep searching until we get back to our start position.
-
-				// This should never really happen unless we are failing to keep our number of active chunks
-				// significantly under the target amount. Perhaps if chunks are 'pinned' for threading purposes?
-				POLYVOX_THROW_IF(!bInsertedSucessfully, std::logic_error, "No space in chunk array for new chunk.");
-
-				// As we have added a chunk we may have exceeded our target chunk limit. Search through the array to
-				// determine how many chunks we have, as well as finding the oldest timestamp. Note that this is potentially
-				// wasteful and we may instead wish to track how many chunks we have and/or delete a chunk at random (or
-				// just check e.g. 10 and delete the oldest of those) but we'll see if this is a bottleneck first. Paging
-				// the data in is probably more expensive.
-				uint32_t uChunkCount = 0;
-				uint32_t uOldestChunkIndex = 0;
-				uint32_t uOldestChunkTimestamp = std::numeric_limits<uint32_t>::max();
-				for (uint32_t uIndex = 0; uIndex < uChunkArraySize; uIndex++)
-				{
-					if (m_arrayChunks[uIndex])
-					{
-						uChunkCount++;
-						if (m_arrayChunks[uIndex]->m_uChunkLastAccessed < uOldestChunkTimestamp)
+						if (m_arrayChunks[iIndex] == nullptr)
 						{
-							uOldestChunkTimestamp = m_arrayChunks[uIndex]->m_uChunkLastAccessed;
-							uOldestChunkIndex = uIndex;
+							m_arrayChunks[iIndex] = pChunk;
+							bInsertedSucessfully = true;
+							break;
+						}
+
+						iIndex++;
+						iIndex %= uChunkArraySize;
+					} while (iIndex != iPosisionHash); // Keep searching until we get back to our start position.
+
+					// This should never really happen unless we are failing to keep our number of active chunks
+					// significantly under the target amount. Perhaps if chunks are 'pinned' for threading purposes?
+					POLYVOX_THROW_IF(!bInsertedSucessfully, std::logic_error, "No space in chunk array for new chunk.");
+
+					// As we have added a chunk we may have exceeded our target chunk limit. Search through the array to
+					// determine how many chunks we have, as well as finding the oldest timestamp. Note that this is potentially
+					// wasteful and we may instead wish to track how many chunks we have and/or delete a chunk at random (or
+					// just check e.g. 10 and delete the oldest of those) but we'll see if this is a bottleneck first. Paging
+					// the data in is probably more expensive.
+					uint32_t uChunkCount = 0;
+					uint32_t uOldestChunkIndex = 0;
+					uint32_t uOldestChunkTimestamp = std::numeric_limits<uint32_t>::max();
+					for (uint32_t uIndex = 0; uIndex < uChunkArraySize; uIndex++)
+					{
+						if (m_arrayChunks[uIndex])
+						{
+							uChunkCount++;
+							if (m_arrayChunks[uIndex]->m_uChunkLastAccessed < uOldestChunkTimestamp)
+							{
+								uOldestChunkTimestamp = m_arrayChunks[uIndex]->m_uChunkLastAccessed;
+								uOldestChunkIndex = uIndex;
+							}
 						}
 					}
-				}
 
-				// Check if we have too many chunks, and delete the oldest if so.
-				if (uChunkCount > m_uChunkCountLimit)
-				{
-					m_arrayChunks[uOldestChunkIndex] = nullptr;
+					// Check if we have too many chunks, and delete the oldest if so.
+					if (uChunkCount > m_uChunkCountLimit)
+					{
+						m_arrayChunks[uOldestChunkIndex] = nullptr;
+					}
 				}
 			}
-			else
+			if (pageInChunk)
 			{
-				pNewChunk = nullptr;
+				pChunk->pageIn();
+				pChunk->writeUnlock();
 			}
 		}
 
 		m_tChunkCache.setChunkCached<_Myt>(this, pChunk, uChunkX, uChunkY, uChunkZ);
 
-		return pChunk.get();
+		return pChunk;
 	}
 
 	////////////////////////////////////////////////////////////////////////////////
@@ -472,25 +448,25 @@ namespace PolyVox
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
 	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::readLockRegion(const Region& region) const
 	{
-		applyOnChunks(region, [this](Chunk* chunk) { chunk->readLock(); });
+		applyOnChunks(region, [this](std::shared_ptr<Chunk> chunk) { chunk->readLock(); });
 	}
 
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
 	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::readUnlockRegion(const Region& region) const
 	{
-		applyOnChunks(region, [this](Chunk* chunk) { chunk->readUnlock(); });
+		applyOnChunks(region, [this](std::shared_ptr<Chunk> chunk) { chunk->readUnlock(); });
 	}
 
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
 	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::writeLockRegion(const Region& region) const
 	{
-		applyOnChunks(region, [this](Chunk* chunk) { chunk->writeLock(); });
+		applyOnChunks(region, [this](std::shared_ptr<Chunk> chunk) { chunk->writeLock(); });
 	}
 
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
 	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::writeUnlockRegion(const Region& region) const
 	{
-		applyOnChunks(region, [this](Chunk* chunk) { chunk->writeUnlock(); });
+		applyOnChunks(region, [this](std::shared_ptr<Chunk> chunk) { chunk->writeUnlock(); });
 	}
 
 	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>

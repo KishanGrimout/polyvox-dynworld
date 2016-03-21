@@ -45,10 +45,10 @@ namespace PolyVox
 	{
 	public:
 		template <typename VolumeType>
-		typename VolumeType::Chunk* getChunkCached(const VolumeType* pVolume, int32_t iChunkX, int32_t iChunkY, int32_t iChunkZ) const;
+		std::weak_ptr<typename VolumeType::Chunk> getChunkCached(const VolumeType* pVolume, int32_t iChunkX, int32_t iChunkY, int32_t iChunkZ) const;
 
 		template <typename VolumeType>
-		void setChunkCached(const VolumeType* pVolume, typename VolumeType::Chunk* pChunk, int32_t iChunkX, int32_t iChunkY, int32_t iChunkZ);
+		void setChunkCached(const VolumeType* pVolume, std::weak_ptr<typename VolumeType::Chunk> pChunk, int32_t iChunkX, int32_t iChunkY, int32_t iChunkZ);
 
 		void dirtyCache();
 
@@ -60,7 +60,7 @@ namespace PolyVox
 		int32_t m_v3dLastAccessedChunkX = 0;
 		int32_t m_v3dLastAccessedChunkY = 0;
 		int32_t m_v3dLastAccessedChunkZ = 0;
-		void* m_pLastAccessedChunk = nullptr;
+		std::weak_ptr<void> m_pLastAccessedChunk;
 		const void* m_pVolume = nullptr;
 	};
 
@@ -171,6 +171,9 @@ namespace PolyVox
 			uint32_t calculateSizeInBytes(void);
 			static uint32_t calculateSizeInBytes(uint32_t uSideLength);
 
+			void pageIn();
+			void pageOut();
+
 			VoxelType* m_tData;
 
 			Pager* m_pPager;
@@ -178,8 +181,8 @@ namespace PolyVox
 			// This is updated by the PagedVolume and used to discard the least recently used chunks.
 			uint32_t m_uChunkLastAccessed;
 
-			uint16_t m_uSideLength;
-			uint8_t m_uSideLengthPower;
+			const uint16_t m_uSideLength;
+			const uint8_t m_uSideLengthPower;
 
 			// This is so we can tell whether a uncompressed chunk has to be recompressed and whether
 			// a compressed chunk has to be paged back to disk, or whether they can just be discarded.
@@ -343,15 +346,20 @@ namespace PolyVox
 		void writeUnlockRegion(const Region& region) const;
 
 	protected:
+		/// These functions should never be called. Copying volumes by value would be expensive, and we want to prevent users from doing
+		/// it by accident (such as when passing them as paramenters to functions). That said, there are times when you really do want to
+		/// make a copy of a volume and in this case you should look at the VolumeResampler.
+		/// \sa VolumeResampler
+
 		/// Copy constructor
-		PagedVolume(const PagedVolume& rhs);
+		PagedVolume(const PagedVolume& rhs) = delete;
 
 		/// Assignment operator
-		PagedVolume& operator=(const PagedVolume& rhs);
+		PagedVolume& operator=(const PagedVolume& rhs) = delete;
 
 	private:
-		void applyOnChunks(const Region& region, std::function<void(Chunk*)> operation) const;
-		Chunk* getChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const;
+		void applyOnChunks(const Region& region, std::function<void(std::shared_ptr<Chunk>)> operation) const;
+		std::shared_ptr<Chunk> getChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const;
 		std::shared_ptr<Chunk> getExistingChunk(uint32_t iPosisionHash, int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const;
 
 		mutable ChunkCacheType m_tChunkCache;
@@ -371,9 +379,9 @@ namespace PolyVox
 		mutable std::shared_ptr< Chunk > m_arrayChunks[uChunkArraySize];
 
 		// The size of the chunks
-		uint16_t m_uChunkSideLength;
-		uint8_t m_uChunkSideLengthPower;
-		int32_t m_iChunkMask;
+		const uint16_t m_uChunkSideLength;
+		const uint8_t m_uChunkSideLengthPower;
+		const int32_t m_iChunkMask;
 
 		Pager* m_pPager = nullptr;
 

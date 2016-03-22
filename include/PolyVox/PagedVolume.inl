@@ -74,44 +74,46 @@ namespace PolyVox
 	/// \param uTargetMemoryUsageInBytes The upper limit to how much memory this PagedVolume should aim to use.
 	/// \param uChunkSideLength The size of the chunks making up the volume. Small chunks will compress/decompress faster, but there will also be more of them meaning voxel access could be slower.
 	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	PagedVolume<VoxelType, ChunkCacheType, RWLockType>::PagedVolume(Pager* pPager, uint32_t uTargetMemoryUsageInBytes, uint16_t uChunkSideLength)
-		:BaseVolume<VoxelType>()
+	template <typename VoxelType, typename RWLockType>
+	PagedVolume<VoxelType, RWLockType>::PagedVolume(Pager* pPager, uint32_t uTargetMemoryUsageInBytes, uint16_t uChunkSideLength, IChunkCache* pChunkCache)
+		: BaseVolume<VoxelType>()
+		, m_pChunkCache(pChunkCache)
 		, m_uChunkSideLength(uChunkSideLength)
 		, m_uChunkSideLengthPower(logBase2(uChunkSideLength)) // Used to perform multiplications and divisions by bit shifting.
 		, m_iChunkMask(uChunkSideLength - 1) // Use to perform modulo by bit operations
 		, m_pPager(pPager)
 	{
-			// Validation of parameters
-			POLYVOX_THROW_IF(!pPager, std::invalid_argument, "You must provide a valid pager when constructing a PagedVolume");
-			POLYVOX_THROW_IF(uTargetMemoryUsageInBytes < 1 * 1024 * 1024, std::invalid_argument, "Target memory usage is too small to be practical");
-			POLYVOX_THROW_IF(m_uChunkSideLength == 0, std::invalid_argument, "Chunk side length cannot be zero.");
-			POLYVOX_THROW_IF(m_uChunkSideLength > 256, std::invalid_argument, "Chunk size is too large to be practical.");
-			POLYVOX_THROW_IF(!isPowerOf2(m_uChunkSideLength), std::invalid_argument, "Chunk side length must be a power of two.");
+		// Validation of parameters
+		POLYVOX_THROW_IF(!pPager, std::invalid_argument, "You must provide a valid pager when constructing a PagedVolume");
+		POLYVOX_THROW_IF(!pChunkCache, std::invalid_argument, "You must provide a valid chunk cache handler when constructing a PagedVolume");
+		POLYVOX_THROW_IF(uTargetMemoryUsageInBytes < 1 * 1024 * 1024, std::invalid_argument, "Target memory usage is too small to be practical");
+		POLYVOX_THROW_IF(m_uChunkSideLength == 0, std::invalid_argument, "Chunk side length cannot be zero.");
+		POLYVOX_THROW_IF(m_uChunkSideLength > 256, std::invalid_argument, "Chunk size is too large to be practical.");
+		POLYVOX_THROW_IF(!isPowerOf2(m_uChunkSideLength), std::invalid_argument, "Chunk side length must be a power of two.");
 
 
-			// Calculate the number of chunks based on the memory limit and the size of each chunk.
-			uint32_t uChunkSizeInBytes = PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk::calculateSizeInBytes(m_uChunkSideLength);
-			m_uChunkCountLimit = uTargetMemoryUsageInBytes / uChunkSizeInBytes;
+		// Calculate the number of chunks based on the memory limit and the size of each chunk.
+		uint32_t uChunkSizeInBytes = PagedVolume<VoxelType, RWLockType>::Chunk::calculateSizeInBytes(m_uChunkSideLength);
+		m_uChunkCountLimit = uTargetMemoryUsageInBytes / uChunkSizeInBytes;
 
-			// Enforce sensible limits on the number of chunks.
-			const uint32_t uMinPracticalNoOfChunks = 32; // Enough to make sure a chunks and it's neighbours can be loaded, with a few to spare.
-			const uint32_t uMaxPracticalNoOfChunks = uChunkArraySize / 2; // A hash table should only become half-full to avoid too many clashes.
-			POLYVOX_LOG_WARNING_IF(m_uChunkCountLimit < uMinPracticalNoOfChunks, "Requested memory usage limit of ",
-				uTargetMemoryUsageInBytes / (1024 * 1024), "Mb is too low and cannot be adhered to.");
-			m_uChunkCountLimit = (std::max)(m_uChunkCountLimit, uMinPracticalNoOfChunks);
-			m_uChunkCountLimit = (std::min)(m_uChunkCountLimit, uMaxPracticalNoOfChunks);
+		// Enforce sensible limits on the number of chunks.
+		const uint32_t uMinPracticalNoOfChunks = 32; // Enough to make sure a chunks and it's neighbours can be loaded, with a few to spare.
+		const uint32_t uMaxPracticalNoOfChunks = uChunkArraySize / 2; // A hash table should only become half-full to avoid too many clashes.
+		POLYVOX_LOG_WARNING_IF(m_uChunkCountLimit < uMinPracticalNoOfChunks, "Requested memory usage limit of ",
+			uTargetMemoryUsageInBytes / (1024 * 1024), "Mb is too low and cannot be adhered to.");
+		m_uChunkCountLimit = (std::max)(m_uChunkCountLimit, uMinPracticalNoOfChunks);
+		m_uChunkCountLimit = (std::min)(m_uChunkCountLimit, uMaxPracticalNoOfChunks);
 
-			// Inform the user about the chosen memory configuration.
-			POLYVOX_LOG_DEBUG("Memory usage limit for volume now set to ", (m_uChunkCountLimit * uChunkSizeInBytes) / (1024 * 1024),
-				"Mb (", m_uChunkCountLimit, " chunks of ", uChunkSizeInBytes / 1024, "Kb each).");
+		// Inform the user about the chosen memory configuration.
+		POLYVOX_LOG_DEBUG("Memory usage limit for volume now set to ", (m_uChunkCountLimit * uChunkSizeInBytes) / (1024 * 1024),
+			"Mb (", m_uChunkCountLimit, " chunks of ", uChunkSizeInBytes / 1024, "Kb each).");
 	}
 
 	////////////////////////////////////////////////////////////////////////////////
 	/// Destroys the volume The destructor will call flushAll() to ensure that a paging volume has the chance to save it's data via the dataOverflowHandler() if desired.
 	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	PagedVolume<VoxelType, ChunkCacheType, RWLockType>::~PagedVolume()
+	template <typename VoxelType, typename RWLockType>
+	PagedVolume<VoxelType, RWLockType>::~PagedVolume()
 	{
 		flushAll();
 	}
@@ -124,8 +126,8 @@ namespace PolyVox
 	/// \param uZPos The \c z position of the voxel
 	/// \return The voxel value
 	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::getVoxel(int32_t uXPos, int32_t uYPos, int32_t uZPos) const
+	template <typename VoxelType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, RWLockType>::getVoxel(int32_t uXPos, int32_t uYPos, int32_t uZPos) const
 	{
 		AutoReadLock<_Myt> volumeLock(this);
 
@@ -137,7 +139,8 @@ namespace PolyVox
 		const uint16_t yOffset = static_cast<uint16_t>(uYPos & m_iChunkMask);
 		const uint16_t zOffset = static_cast<uint16_t>(uZPos & m_iChunkMask);
 
-		std::shared_ptr<Chunk> pChunk = m_tChunkCache.getChunkCached<_Myt>(this, chunkX, chunkY, chunkZ).lock();
+		std::shared_ptr<Chunk> pChunk = m_pChunkCache->getChunkCached(this, chunkX, chunkY, chunkZ).lock();
+
 		if (pChunk == nullptr)
 			pChunk = getChunk(chunkX, chunkY, chunkZ);
 
@@ -151,8 +154,8 @@ namespace PolyVox
 	/// \param v3dPos The 3D position of the voxel
 	/// \return The voxel value
 	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	VoxelType PagedVolume<VoxelType, ChunkCacheType, RWLockType>::getVoxel(const Vector3DInt32& v3dPos) const
+	template <typename VoxelType, typename RWLockType>
+	VoxelType PagedVolume<VoxelType, RWLockType>::getVoxel(const Vector3DInt32& v3dPos) const
 	{
 		return getVoxel(v3dPos.getX(), v3dPos.getY(), v3dPos.getZ());
 	}
@@ -162,8 +165,8 @@ namespace PolyVox
 	/// \param uYPos the \c y position of the voxel
 	/// \param uZPos the \c z position of the voxel
 	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::setVoxel(int32_t uXPos, int32_t uYPos, int32_t uZPos, VoxelType tValue)
+	template <typename VoxelType, typename RWLockType>
+	void PagedVolume<VoxelType, RWLockType>::setVoxel(int32_t uXPos, int32_t uYPos, int32_t uZPos, VoxelType tValue)
 	{
 		const int32_t chunkX = uXPos >> m_uChunkSideLengthPower;
 		const int32_t chunkY = uYPos >> m_uChunkSideLengthPower;
@@ -173,7 +176,8 @@ namespace PolyVox
 		const uint16_t yOffset = static_cast<uint16_t>(uYPos - (chunkY << m_uChunkSideLengthPower));
 		const uint16_t zOffset = static_cast<uint16_t>(uZPos - (chunkZ << m_uChunkSideLengthPower));
 
-		std::shared_ptr<Chunk> pChunk = m_tChunkCache.getChunkCached<_Myt>(this, chunkX, chunkY, chunkZ).lock();
+		std::shared_ptr<Chunk> pChunk = m_pChunkCache->getChunkCached(this, chunkX, chunkY, chunkZ).lock();
+
 		if (pChunk == nullptr)
 			pChunk = getChunk(chunkX, chunkY, chunkZ);
 
@@ -185,8 +189,8 @@ namespace PolyVox
 	/// \param v3dPos the 3D position of the voxel
 	/// \param tValue the value to which the voxel will be set
 	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::setVoxel(const Vector3DInt32& v3dPos, VoxelType tValue)
+	template <typename VoxelType, typename RWLockType>
+	void PagedVolume<VoxelType, RWLockType>::setVoxel(const Vector3DInt32& v3dPos, VoxelType tValue)
 	{
 		setVoxel(v3dPos.getX(), v3dPos.getY(), v3dPos.getZ(), tValue);
 	}
@@ -195,8 +199,8 @@ namespace PolyVox
 	/// Note that if the memory usage limit is not large enough to support the region this function will only load part of the region. In this case it is undefined which parts will actually be loaded. If all the voxels in the given region are already loaded, this function will not do anything. Other voxels might be unloaded to make space for the new voxels.
 	/// \param regPrefetch The Region of voxels to prefetch into memory.
 	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::prefetch(const Region& regPrefetch)
+	template <typename VoxelType, typename RWLockType>
+	void PagedVolume<VoxelType, RWLockType>::prefetch(const Region& regPrefetch)
 	{
 		applyOnChunks(regPrefetch, [](std::shared_ptr<Chunk> chunk) { /* Nothing to do, just touch the chunks */ });
 	}
@@ -204,11 +208,11 @@ namespace PolyVox
 	////////////////////////////////////////////////////////////////////////////////
 	/// Removes all voxels from memory, and calls dataOverflowHandler() to ensure the application has a chance to store the data.
 	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::flushAll()
+	template <typename VoxelType, typename RWLockType>
+	void PagedVolume<VoxelType, RWLockType>::flushAll()
 	{
 		// Clear chunk cache as all chunks are about to be removed.
-		m_tChunkCache.dirtyCache();
+		m_pChunkCache->dirtyCache();
 
 		AutoWriteLock<RWLockType> lock(&m_internalLock);
 
@@ -219,8 +223,8 @@ namespace PolyVox
 		}
 	}
 
-	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::applyOnChunks(const Region& region, std::function<void(std::shared_ptr<Chunk>)> operation) const
+	template <typename VoxelType, typename RWLockType>
+	void PagedVolume<VoxelType, RWLockType>::applyOnChunks(const Region& region, std::function<void(std::shared_ptr<Chunk>)> operation) const
 	{
 		// Convert the start and end positions into chunk space coordinates
 		Vector3DInt32 v3dStart;
@@ -254,8 +258,8 @@ namespace PolyVox
 		}
 	}
 
-	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	std::shared_ptr<typename PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk> PagedVolume<VoxelType, ChunkCacheType, RWLockType>::getExistingChunk(uint32_t iPosisionHash, int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const
+	template <typename VoxelType, typename RWLockType>
+	std::shared_ptr<typename PagedVolume<VoxelType, RWLockType>::Chunk> PagedVolume<VoxelType, RWLockType>::getExistingChunk(uint32_t iPosisionHash, int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const
 	{
 		std::shared_ptr<Chunk> pChunk;
 
@@ -285,8 +289,8 @@ namespace PolyVox
 		return pChunk;
 	}
 
-	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	std::shared_ptr<typename PagedVolume<VoxelType, ChunkCacheType, RWLockType>::Chunk> PagedVolume<VoxelType, ChunkCacheType, RWLockType>::getChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const
+	template <typename VoxelType, typename RWLockType>
+	std::shared_ptr<typename PagedVolume<VoxelType, RWLockType>::Chunk> PagedVolume<VoxelType, RWLockType>::getChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const
 	{
 		std::shared_ptr<Chunk> pChunk;
 
@@ -318,11 +322,10 @@ namespace PolyVox
 				{
 					// The chunk was not found so we will create a new one.
 					Vector3DInt32 v3dChunkPos(uChunkX, uChunkY, uChunkZ);
-					std::shared_ptr<Chunk> pNewChunk = std::make_shared<Chunk>(v3dChunkPos, m_uChunkSideLength, m_pPager);
-					pNewChunk->writeLock();
+					pChunk = std::make_shared<Chunk>(v3dChunkPos, m_uChunkSideLength, m_pPager);
+					pChunk->writeLock();
 					pageInChunk = true;
 
-					pChunk = pNewChunk;
 					pChunk->m_uChunkLastAccessed = RWLockType::preIncr(m_uTimestamper); // Important, as we may soon delete the oldest chunk
 
 					// Store the chunk at the appropriate place in out chunk array. Ideally this place is
@@ -382,7 +385,7 @@ namespace PolyVox
 			}
 		}
 
-		m_tChunkCache.setChunkCached<_Myt>(this, pChunk, uChunkX, uChunkY, uChunkZ);
+		m_pChunkCache->setChunkCached(this, pChunk, uChunkX, uChunkY, uChunkZ);
 
 		return pChunk;
 	}
@@ -390,8 +393,8 @@ namespace PolyVox
 	////////////////////////////////////////////////////////////////////////////////
 	/// Calculate the memory usage of the volume.
 	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	uint32_t PagedVolume<VoxelType, ChunkCacheType, RWLockType>::calculateSizeInBytes(void)
+	template <typename VoxelType, typename RWLockType>
+	uint32_t PagedVolume<VoxelType, RWLockType>::calculateSizeInBytes(void)
 	{
 		AutoReadLock<RWLockType> lock(&m_internalLock);
 
@@ -409,88 +412,88 @@ namespace PolyVox
 		return _Myt::Chunk::calculateSizeInBytes(m_uChunkSideLength) * uChunkCount;
 	}
 
-	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::readLock() const
+	template <typename VoxelType, typename RWLockType>
+	void PagedVolume<VoxelType, RWLockType>::readLock() const
 	{
 		m_volumeLock.readLock();
 	}
 
-	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::readUnlock() const
+	template <typename VoxelType, typename RWLockType>
+	void PagedVolume<VoxelType, RWLockType>::readUnlock() const
 	{
 		m_volumeLock.readUnlock();
 	}
 
-	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::writeLock() const
+	template <typename VoxelType, typename RWLockType>
+	void PagedVolume<VoxelType, RWLockType>::writeLock() const
 	{
 		m_volumeLock.writeLock();
 	}
 
-	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::writeUnlock() const
+	template <typename VoxelType, typename RWLockType>
+	void PagedVolume<VoxelType, RWLockType>::writeUnlock() const
 	{
 		m_volumeLock.writeUnlock();
 	}
 
-	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::upgradeLock() const
+	template <typename VoxelType, typename RWLockType>
+	void PagedVolume<VoxelType, RWLockType>::upgradeLock() const
 	{
 		m_volumeLock.upgradeLock();
 	}
 
-	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::downgradeLock() const
+	template <typename VoxelType, typename RWLockType>
+	void PagedVolume<VoxelType, RWLockType>::downgradeLock() const
 	{
 		m_volumeLock.downgradeLock();
 	}
 
-	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::readLockRegion(const Region& region) const
+	template <typename VoxelType, typename RWLockType>
+	void PagedVolume<VoxelType, RWLockType>::readLockRegion(const Region& region) const
 	{
 		applyOnChunks(region, [this](std::shared_ptr<Chunk> chunk) { chunk->readLock(); });
 	}
 
-	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::readUnlockRegion(const Region& region) const
+	template <typename VoxelType, typename RWLockType>
+	void PagedVolume<VoxelType, RWLockType>::readUnlockRegion(const Region& region) const
 	{
 		applyOnChunks(region, [this](std::shared_ptr<Chunk> chunk) { chunk->readUnlock(); });
 	}
 
-	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::writeLockRegion(const Region& region) const
+	template <typename VoxelType, typename RWLockType>
+	void PagedVolume<VoxelType, RWLockType>::writeLockRegion(const Region& region) const
 	{
 		applyOnChunks(region, [this](std::shared_ptr<Chunk> chunk) { chunk->writeLock(); });
 	}
 
-	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	void PagedVolume<VoxelType, ChunkCacheType, RWLockType>::writeUnlockRegion(const Region& region) const
+	template <typename VoxelType, typename RWLockType>
+	void PagedVolume<VoxelType, RWLockType>::writeUnlockRegion(const Region& region) const
 	{
 		applyOnChunks(region, [this](std::shared_ptr<Chunk> chunk) { chunk->writeUnlock(); });
 	}
 
-	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	PagedVolume<VoxelType, ChunkCacheType, RWLockType>::AutoReadLockRegion::AutoReadLockRegion(const _Myt* volume, const Region& region)
+	template <typename VoxelType, typename RWLockType>
+	PagedVolume<VoxelType, RWLockType>::AutoReadLockRegion::AutoReadLockRegion(const _Myt* volume, const Region& region)
 		: m_volume(volume), m_region(region)
 	{
 		m_volume->readLockRegion(m_region);
 	}
 
-	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	PagedVolume<VoxelType, ChunkCacheType, RWLockType>::AutoReadLockRegion::~AutoReadLockRegion()
+	template <typename VoxelType, typename RWLockType>
+	PagedVolume<VoxelType, RWLockType>::AutoReadLockRegion::~AutoReadLockRegion()
 	{
 		m_volume->readUnlockRegion(m_region);
 	}
 
-	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	PagedVolume<VoxelType, ChunkCacheType, RWLockType>::AutoWriteLockRegion::AutoWriteLockRegion(const _Myt* volume, const Region& region)
+	template <typename VoxelType, typename RWLockType>
+	PagedVolume<VoxelType, RWLockType>::AutoWriteLockRegion::AutoWriteLockRegion(const _Myt* volume, const Region& region)
 		: m_volume(volume), m_region(region)
 	{
 		m_volume->writeLockRegion(m_region);
 	}
 
-	template <typename VoxelType, typename ChunkCacheType, typename RWLockType>
-	PagedVolume<VoxelType, ChunkCacheType, RWLockType>::AutoWriteLockRegion::~AutoWriteLockRegion()
+	template <typename VoxelType, typename RWLockType>
+	PagedVolume<VoxelType, RWLockType>::AutoWriteLockRegion::~AutoWriteLockRegion()
 	{
 		m_volume->writeUnlockRegion(m_region);
 	}

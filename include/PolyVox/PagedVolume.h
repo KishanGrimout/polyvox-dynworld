@@ -41,29 +41,6 @@
 
 namespace PolyVox
 {
-	class DefaultChunkCache
-	{
-	public:
-		template <typename VolumeType>
-		std::weak_ptr<typename VolumeType::Chunk> getChunkCached(const VolumeType* pVolume, int32_t iChunkX, int32_t iChunkY, int32_t iChunkZ) const;
-
-		template <typename VolumeType>
-		void setChunkCached(const VolumeType* pVolume, std::weak_ptr<typename VolumeType::Chunk> pChunk, int32_t iChunkX, int32_t iChunkY, int32_t iChunkZ);
-
-		void dirtyCache();
-
-	private:
-		// Storing these properties individually has proved to be faster than keeping
-		// them in a Vector3DInt32 as it avoids constructions and comparison overheads.
-		// They are also at the start of the class in the hope that they will be pulled
-		// into cache - I've got no idea if this actually makes a difference.
-		int32_t m_v3dLastAccessedChunkX = 0;
-		int32_t m_v3dLastAccessedChunkY = 0;
-		int32_t m_v3dLastAccessedChunkZ = 0;
-		std::weak_ptr<void> m_pLastAccessedChunk;
-		const void* m_pVolume = nullptr;
-	};
-
 	class DummyRWLock
 	{
 	public:
@@ -123,7 +100,7 @@ namespace PolyVox
 	/// A consequence of this paging approach is that (unlike the RawVolume) the PagedVolume does not need to have a predefined size. After
 	/// the volume has been created you can begin acessing voxels anywhere in space and the required data will be created automatically.
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType, typename ChunkCacheType = DefaultChunkCache, typename RWLockType = DummyRWLock>
+	template <typename VoxelType, typename RWLockType = DummyRWLock>
 	class PagedVolume : public BaseVolume<VoxelType>
 	{
 	public:
@@ -194,6 +171,34 @@ namespace PolyVox
 			mutable RWLockType m_lock;
 		};
 
+		class IChunkCache
+		{
+		public:
+			virtual ~IChunkCache() {}
+
+			virtual std::weak_ptr<typename PagedVolume<VoxelType, RWLockType>::Chunk> getChunkCached(const PagedVolume<VoxelType, RWLockType>* pVolume, int32_t iChunkX, int32_t iChunkY, int32_t iChunkZ) const = 0;
+			virtual void setChunkCached(const PagedVolume<VoxelType, RWLockType>* pVolume, std::weak_ptr<typename PagedVolume<VoxelType, RWLockType>::Chunk> pChunk, int32_t iChunkX, int32_t iChunkY, int32_t iChunkZ) = 0;
+			virtual void dirtyCache() = 0;
+		};
+
+		class DefaultChunkCache : public IChunkCache
+		{
+		public:
+			virtual std::weak_ptr<typename PagedVolume<VoxelType, RWLockType>::Chunk> getChunkCached(const PagedVolume<VoxelType, RWLockType>* pVolume, int32_t iChunkX, int32_t iChunkY, int32_t iChunkZ) const override;
+			virtual void setChunkCached(const PagedVolume<VoxelType, RWLockType>* pVolume, std::weak_ptr<typename PagedVolume<VoxelType, RWLockType>::Chunk> pChunk, int32_t iChunkX, int32_t iChunkY, int32_t iChunkZ) override;
+			virtual void dirtyCache() override;
+
+		private:
+			// Storing these properties individually has proved to be faster than keeping
+			// them in a Vector3DInt32 as it avoids constructions and comparison overheads.
+			// They are also at the start of the class in the hope that they will be pulled
+			// into cache - I've got no idea if this actually makes a difference.
+			int32_t m_v3dLastAccessedChunkX = 0;
+			int32_t m_v3dLastAccessedChunkY = 0;
+			int32_t m_v3dLastAccessedChunkZ = 0;
+			std::weak_ptr<typename PagedVolume<VoxelType, RWLockType>::Chunk> m_pLastAccessedChunk;
+		};
+
 		/**
 		* Users can override this class and provide an instance of the derived class to the PagedVolume constructor. This derived class
 		* could then perform tasks such as compression and decompression of the data, and read/writing it to a file, database, network,
@@ -217,16 +222,16 @@ namespace PolyVox
 		//option. For now it seems best to 'fix' it with the preprocessor insstead, but maybe the workaround can be reinstated
 		//in the future
 		//typedef Volume<VoxelType> VolumeOfVoxelType; //Workaround for GCC/VS2010 differences.
-		//class Sampler : public VolumeOfVoxelType::template Sampler< PagedVolume<VoxelType, ChunkCacheType, RWLockType> >
+		//class Sampler : public VolumeOfVoxelType::template Sampler< PagedVolume<VoxelType, RWLockType> >
 #ifndef SWIG
 #if defined(_MSC_VER)
-		class Sampler : public BaseVolume<VoxelType>::Sampler< PagedVolume<VoxelType, ChunkCacheType, RWLockType> > //This line works on VS2010
+		class Sampler : public BaseVolume<VoxelType>::Sampler< PagedVolume<VoxelType, RWLockType> > //This line works on VS2010
 #else
-		class Sampler : public BaseVolume<VoxelType>::template Sampler< PagedVolume<VoxelTyp, ChunkCacheTypee> > //This line works on GCC
+		class Sampler : public BaseVolume<VoxelType>::template Sampler< PagedVolume<VoxelType, RWLockType> > //This line works on GCC
 #endif
 		{
 		public:
-			Sampler(PagedVolume<VoxelType, ChunkCacheType, RWLockType>* volume);
+			Sampler(PagedVolume<VoxelType, RWLockType>* volume);
 			~Sampler();
 
 			inline VoxelType getVoxel(void) const;
@@ -291,27 +296,27 @@ namespace PolyVox
 
 		class AutoReadLockRegion
 		{
-			const PagedVolume<VoxelType, ChunkCacheType, RWLockType>* m_volume;
+			const PagedVolume<VoxelType, RWLockType>* m_volume;
 			const Region& m_region;
 
 		public:
-			AutoReadLockRegion(const PagedVolume<VoxelType, ChunkCacheType, RWLockType>* volume, const Region& region);
+			AutoReadLockRegion(const PagedVolume<VoxelType, RWLockType>* volume, const Region& region);
 			~AutoReadLockRegion();
 		};
 
 		class AutoWriteLockRegion
 		{
-			const PagedVolume<VoxelType, ChunkCacheType, RWLockType>* m_volume;
+			const PagedVolume<VoxelType, RWLockType>* m_volume;
 			const Region& m_region;
 
 		public:
-			AutoWriteLockRegion(const PagedVolume<VoxelType, ChunkCacheType, RWLockType>* volume, const Region& region);
+			AutoWriteLockRegion(const PagedVolume<VoxelType, RWLockType>* volume, const Region& region);
 			~AutoWriteLockRegion();
 		};
 
 	public:
 		/// Constructor for creating a fixed size volume.
-		PagedVolume(Pager* pPager, uint32_t uTargetMemoryUsageInBytes = 256 * 1024 * 1024, uint16_t uChunkSideLength = 32);
+		PagedVolume(Pager* pPager, uint32_t uTargetMemoryUsageInBytes = 256 * 1024 * 1024, uint16_t uChunkSideLength = 32, IChunkCache* pChunkCache = new DefaultChunkCache);
 		/// Destructor
 		~PagedVolume();
 
@@ -362,7 +367,7 @@ namespace PolyVox
 		std::shared_ptr<Chunk> getChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const;
 		std::shared_ptr<Chunk> getExistingChunk(uint32_t iPosisionHash, int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const;
 
-		mutable ChunkCacheType m_tChunkCache;
+		mutable IChunkCache* m_pChunkCache;
 
 		mutable uint32_t m_uTimestamper = 0;
 
@@ -388,7 +393,7 @@ namespace PolyVox
 		mutable RWLockType m_volumeLock;
 		mutable RWLockType m_internalLock;
 
-		typedef PagedVolume<VoxelType, ChunkCacheType, RWLockType> _Myt;
+		typedef PagedVolume<VoxelType, RWLockType> _Myt;
 	};
 
 }

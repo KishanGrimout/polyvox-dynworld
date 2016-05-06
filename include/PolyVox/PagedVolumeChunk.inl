@@ -83,6 +83,9 @@ namespace PolyVox
 
 			// Page the data in
 			m_pPager->pageIn(reg, this);
+
+			// Reset the flag as we consider it's untouched with the pageIn data
+			m_bDataModified = false;
 		}
 	}
 

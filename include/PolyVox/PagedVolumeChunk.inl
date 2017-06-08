@@ -154,6 +154,12 @@ namespace PolyVox
 	}
 
 	template <typename VoxelType, typename RWLockType>
+	bool PagedVolume<VoxelType, RWLockType>::Chunk::isLocked() const
+	{
+		return m_lock.isLocked();
+	}
+
+	template <typename VoxelType, typename RWLockType>
 	uint32_t PagedVolume<VoxelType, RWLockType>::Chunk::calculateSizeInBytes(void)
 	{
 		// Call through to the static version

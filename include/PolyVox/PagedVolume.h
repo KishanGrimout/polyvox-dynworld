@@ -50,6 +50,7 @@ namespace PolyVox
 		void writeUnlock() const {}
 		void upgradeLock() const {}
 		void downgradeLock() const {}
+		bool isLocked() const { return false; }
 
 		template <typename T> static T postIncr(T& value) { return value++; }
 		template <typename T> static T preIncr(T& value)  { return ++value; }
@@ -127,6 +128,7 @@ namespace PolyVox
 			void setVoxel(const Vector3DUint16& v3dPos, VoxelType tValue);
 
 			bool getDataModified() const;
+			bool isLocked() const;
 
 			void changeLinearOrderingToMorton(void);
 			void changeMortonOrderingToLinear(void);
@@ -330,6 +332,14 @@ namespace PolyVox
 		/// Sets the voxel at the position given by a 3D vector
 		void setVoxel(const Vector3DInt32& v3dPos, VoxelType tValue);
 
+		enum RegionStatus
+		{
+			Available,
+			Locked,
+			NotAvailable
+		};
+		// Queries the status of the region: Available if in memory, Locked if at least partially locked (load in progress for instance), NotAvailable if not all in memory
+		RegionStatus getRegionStatus(const Region& regQuery);
 		/// Tries to ensure that the voxels within the specified Region are loaded into memory.
 		void prefetch(const Region& regPrefetch);
 		/// Removes all voxels from memory
@@ -363,7 +373,9 @@ namespace PolyVox
 		PagedVolume& operator=(const PagedVolume& rhs) = delete;
 
 	private:
-		void applyOnChunks(const Region& region, std::function<void(std::shared_ptr<Chunk>)> operation) const;
+		template <typename Get, typename F>
+		void applyOnChunks(const Region& region, F operation, Get getChunkF) const;
+		std::shared_ptr<Chunk> tryGetChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const;
 		std::shared_ptr<Chunk> getChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const;
 		std::shared_ptr<Chunk> getExistingChunk(uint32_t iPosisionHash, int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const;
 

@@ -202,7 +202,33 @@ namespace PolyVox
 	template <typename VoxelType, typename RWLockType>
 	void PagedVolume<VoxelType, RWLockType>::prefetch(const Region& regPrefetch)
 	{
-		applyOnChunks(regPrefetch, [](std::shared_ptr<Chunk> chunk) { /* Nothing to do, just touch the chunks */ });
+		applyOnChunks(regPrefetch, [](const std::shared_ptr<Chunk>& chunk) { /* Nothing to do, just touch the chunks */ }, getChunk);
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	/// Queries the status of the region:
+	/// \return Available if in memory, Locked if at least partially locked (load in progress for instance), NotAvailable if not all in memory
+	////////////////////////////////////////////////////////////////////////////////
+	template <typename VoxelType, typename RWLockType>
+	RegionStatus PagedVolume<VoxelType, RWLockType>::getRegionStatus(const Region& regQuery)
+	{
+		RegionStatus status = Available;
+		applyOnChunks(regQuery, [this, &status](const std::shared_ptr<Chunk>& chunk)
+		{
+			if (!chunk)
+			{
+				status = NotAvailable;
+			}
+			else if (status != PagedOut)
+			{
+				if (chunk->isLocked())
+				{
+					status = Locked;
+				}
+			}
+		},
+		tryGetChunk);
+		return status;
 	}
 
 	////////////////////////////////////////////////////////////////////////////////
@@ -224,7 +250,8 @@ namespace PolyVox
 	}
 
 	template <typename VoxelType, typename RWLockType>
-	void PagedVolume<VoxelType, RWLockType>::applyOnChunks(const Region& region, std::function<void(std::shared_ptr<Chunk>)> operation) const
+	template <typename Get, typename F>
+	void PagedVolume<VoxelType, RWLockType>::applyOnChunks<Get, F>(const Region& region, F operation, Get getChunkF) const
 	{
 		// Convert the start and end positions into chunk space coordinates
 		Vector3DInt32 v3dStart;
@@ -252,7 +279,7 @@ namespace PolyVox
 			{
 				for (int32_t z = v3dStart.getZ(); z <= v3dEnd.getZ(); z++)
 				{
-					operation(getChunk(x, y, z));
+					operation(getChunkF(x, y, z));
 				}
 			}
 		}
@@ -290,7 +317,7 @@ namespace PolyVox
 	}
 
 	template <typename VoxelType, typename RWLockType>
-	std::shared_ptr<typename PagedVolume<VoxelType, RWLockType>::Chunk> PagedVolume<VoxelType, RWLockType>::getChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const
+	std::shared_ptr<typename PagedVolume<VoxelType, RWLockType>::Chunk> PagedVolume<VoxelType, RWLockType>::tryGetChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const
 	{
 		std::shared_ptr<Chunk> pChunk;
 
@@ -309,22 +336,34 @@ namespace PolyVox
 			pChunk = getExistingChunk(iPosisionHash, uChunkX, uChunkY, uChunkZ);
 		}
 
+		return pChunk;
+	}
+
+	template <typename VoxelType, typename RWLockType>
+	std::shared_ptr<typename PagedVolume<VoxelType, RWLockType>::Chunk> PagedVolume<VoxelType, RWLockType>::getChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const
+	{
+		std::shared_ptr<Chunk> pChunk = tryGetChunk(uChunkX, uChunkY, uChunkZ);
+
 		if (!pChunk)
 		{
 			bool pageInChunk = false;
 			{
 				// If the chunk was not found, attempt to get it with exclusive lock in case one create it in the meantime.
 				AutoWriteLock<RWLockType> writeLock(&m_internalLock);
+				PIXBeginEvent(PIX_COLOR_DEFAULT, "GetExistingChunk");
 				pChunk = getExistingChunk(iPosisionHash, uChunkX, uChunkY, uChunkZ);
+				PIXEndEvent();
 
 				// If we still haven't found the chunk then it's time to create one.
 				if (!pChunk)
 				{
 					// The chunk was not found so we will create a new one.
+					PIXBeginEvent(PIX_COLOR_DEFAULT, "CreateChunk");
 					Vector3DInt32 v3dChunkPos(uChunkX, uChunkY, uChunkZ);
 					pChunk = std::make_shared<Chunk>(v3dChunkPos, m_uChunkSideLength, m_pPager);
 					pChunk->writeLock();
 					pageInChunk = true;
+					PIXEndEvent();
 
 					pChunk->m_uChunkLastAccessed = RWLockType::preIncr(m_uTimestamper); // Important, as we may soon delete the oldest chunk
 
@@ -333,6 +372,7 @@ namespace PolyVox
 					// We always expect to find a free place because we aim to keep the array only half full.
 					uint32_t iIndex = iPosisionHash;
 					bool bInsertedSucessfully = false;
+					PIXBeginEvent(PIX_COLOR_DEFAULT, "SearchFreeChunkSlot");
 					do
 					{
 						if (m_arrayChunks[iIndex] == nullptr)
@@ -345,6 +385,7 @@ namespace PolyVox
 						iIndex++;
 						iIndex %= uChunkArraySize;
 					} while (iIndex != iPosisionHash); // Keep searching until we get back to our start position.
+					PIXEndEvent();
 
 					// This should never really happen unless we are failing to keep our number of active chunks
 					// significantly under the target amount. Perhaps if chunks are 'pinned' for threading purposes?
@@ -358,6 +399,7 @@ namespace PolyVox
 					uint32_t uChunkCount = 0;
 					uint32_t uOldestChunkIndex = 0;
 					uint32_t uOldestChunkTimestamp = std::numeric_limits<uint32_t>::max();
+					PIXBeginEvent(PIX_COLOR_DEFAULT, "SearchOldestChunk");
 					for (uint32_t uIndex = 0; uIndex < uChunkArraySize; uIndex++)
 					{
 						if (m_arrayChunks[uIndex])
@@ -370,16 +412,19 @@ namespace PolyVox
 							}
 						}
 					}
+					PIXEndEvent();
 
 					// Check if we have too many chunks, and delete the oldest if so.
 					if (uChunkCount > m_uChunkCountLimit)
 					{
+						PIXScopedEvent(PIX_COLOR_DEFAULT, "DeleteOldestChunk");
 						m_arrayChunks[uOldestChunkIndex] = nullptr;
 					}
 				}
 			}
 			if (pageInChunk)
 			{
+				PIXScopedEvent(PIX_COLOR_DEFAULT, "PageInChunk");
 				pChunk->pageIn();
 				pChunk->writeUnlock();
 			}
@@ -451,25 +496,25 @@ namespace PolyVox
 	template <typename VoxelType, typename RWLockType>
 	void PagedVolume<VoxelType, RWLockType>::readLockRegion(const Region& region) const
 	{
-		applyOnChunks(region, [this](std::shared_ptr<Chunk> chunk) { chunk->readLock(); });
+		applyOnChunks(region, [this](std::shared_ptr<Chunk> chunk) { chunk->readLock(); }, getChunk);
 	}
 
 	template <typename VoxelType, typename RWLockType>
 	void PagedVolume<VoxelType, RWLockType>::readUnlockRegion(const Region& region) const
 	{
-		applyOnChunks(region, [this](std::shared_ptr<Chunk> chunk) { chunk->readUnlock(); });
+		applyOnChunks(region, [this](std::shared_ptr<Chunk> chunk) { chunk->readUnlock(); }, getChunk);
 	}
 
 	template <typename VoxelType, typename RWLockType>
 	void PagedVolume<VoxelType, RWLockType>::writeLockRegion(const Region& region) const
 	{
-		applyOnChunks(region, [this](std::shared_ptr<Chunk> chunk) { chunk->writeLock(); });
+		applyOnChunks(region, [this](std::shared_ptr<Chunk> chunk) { chunk->writeLock(); }, getChunk);
 	}
 
 	template <typename VoxelType, typename RWLockType>
 	void PagedVolume<VoxelType, RWLockType>::writeUnlockRegion(const Region& region) const
 	{
-		applyOnChunks(region, [this](std::shared_ptr<Chunk> chunk) { chunk->writeUnlock(); });
+		applyOnChunks(region, [this](std::shared_ptr<Chunk> chunk) { chunk->writeUnlock(); }, getChunk);
 	}
 
 	template <typename VoxelType, typename RWLockType>

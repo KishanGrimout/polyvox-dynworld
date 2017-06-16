@@ -87,6 +87,13 @@ namespace PolyVox
 		~AutoWriteLock();
 	};
 
+	enum class RegionStatus
+	{
+		Available,
+		Locked,
+		NotAvailable
+	};
+
 	/// The PagedVolume class provides a memory efficient method of storing voxel data while also allowing fast access and modification.
 	/// This class provide a volume implementation which avoids storing all the data in memory at all times. Instead it breaks the volume
 	/// down into a set of chunks and moves these into and out of memory on demand. This means it is much more memory efficient than the
@@ -332,12 +339,6 @@ namespace PolyVox
 		/// Sets the voxel at the position given by a 3D vector
 		void setVoxel(const Vector3DInt32& v3dPos, VoxelType tValue);
 
-		enum RegionStatus
-		{
-			Available,
-			Locked,
-			NotAvailable
-		};
 		// Queries the status of the region: Available if in memory, Locked if at least partially locked (load in progress for instance), NotAvailable if not all in memory
 		RegionStatus getRegionStatus(const Region& regQuery);
 		/// Tries to ensure that the voxels within the specified Region are loaded into memory.

@@ -202,7 +202,9 @@ namespace PolyVox
 	template <typename VoxelType, typename RWLockType>
 	void PagedVolume<VoxelType, RWLockType>::prefetch(const Region& regPrefetch)
 	{
-		applyOnChunks(regPrefetch, [](const std::shared_ptr<Chunk>& chunk) { /* Nothing to do, just touch the chunks */ }, getChunk);
+		applyOnChunks(regPrefetch,
+			[](const std::shared_ptr<Chunk>& chunk) { /* Nothing to do, just touch the chunks */ },
+			[this](int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) { return getChunk(uChunkX, uChunkY, uChunkZ); });
 	}
 
 	////////////////////////////////////////////////////////////////////////////////
@@ -212,22 +214,23 @@ namespace PolyVox
 	template <typename VoxelType, typename RWLockType>
 	RegionStatus PagedVolume<VoxelType, RWLockType>::getRegionStatus(const Region& regQuery)
 	{
-		RegionStatus status = Available;
-		applyOnChunks(regQuery, [this, &status](const std::shared_ptr<Chunk>& chunk)
-		{
-			if (!chunk)
+		RegionStatus status = RegionStatus::Available;
+		applyOnChunks(regQuery,
+			[this, &status](const std::shared_ptr<Chunk>& chunk)
 			{
-				status = NotAvailable;
-			}
-			else if (status != PagedOut)
-			{
-				if (chunk->isLocked())
+				if (!chunk)
 				{
-					status = Locked;
+					status = RegionStatus::NotAvailable;
 				}
-			}
-		},
-		tryGetChunk);
+				else if (status != RegionStatus::NotAvailable)
+				{
+					if (chunk->isLocked())
+					{
+						status = RegionStatus::Locked;
+					}
+				}
+			},
+			[this](int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) { return tryGetChunk(uChunkX, uChunkY, uChunkZ); });
 		return status;
 	}
 
@@ -251,7 +254,7 @@ namespace PolyVox
 
 	template <typename VoxelType, typename RWLockType>
 	template <typename Get, typename F>
-	void PagedVolume<VoxelType, RWLockType>::applyOnChunks<Get, F>(const Region& region, F operation, Get getChunkF) const
+	void PagedVolume<VoxelType, RWLockType>::applyOnChunks(const Region& region, F operation, Get getChunkF) const
 	{
 		// Convert the start and end positions into chunk space coordinates
 		Vector3DInt32 v3dStart;
@@ -342,7 +345,22 @@ namespace PolyVox
 	template <typename VoxelType, typename RWLockType>
 	std::shared_ptr<typename PagedVolume<VoxelType, RWLockType>::Chunk> PagedVolume<VoxelType, RWLockType>::getChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const
 	{
-		std::shared_ptr<Chunk> pChunk = tryGetChunk(uChunkX, uChunkY, uChunkZ);
+		std::shared_ptr<Chunk> pChunk;
+
+		// We generate a 16-bit hash here and assume this matches the range available in the chunk
+		// array. The assert here is just to make sure we take care if change this in the future.
+		static_assert(uChunkArraySize == 65536, "Chunk array size has changed, check if the hash calculation needs updating.");
+		// Extract the lower five bits from each position component.
+		const uint32_t uChunkXLowerBits = static_cast<uint32_t>(uChunkX & 0x1F);
+		const uint32_t uChunkYLowerBits = static_cast<uint32_t>(uChunkY & 0x1F);
+		const uint32_t uChunkZLowerBits = static_cast<uint32_t>(uChunkZ & 0x1F);
+		// Combine then to form a 15-bit hash of the position. Also shift by one to spread the values out in the whole 16-bit space.
+		const uint32_t iPosisionHash = (((uChunkXLowerBits)) | ((uChunkYLowerBits) << 5) | ((uChunkZLowerBits) << 10) << 1);
+
+		{ // First try to get the chunk in read-only mode
+			AutoReadLock<RWLockType> lock(&m_internalLock);
+			pChunk = getExistingChunk(iPosisionHash, uChunkX, uChunkY, uChunkZ);
+		}
 
 		if (!pChunk)
 		{
@@ -496,25 +514,33 @@ namespace PolyVox
 	template <typename VoxelType, typename RWLockType>
 	void PagedVolume<VoxelType, RWLockType>::readLockRegion(const Region& region) const
 	{
-		applyOnChunks(region, [this](std::shared_ptr<Chunk> chunk) { chunk->readLock(); }, getChunk);
+		applyOnChunks(region,
+			[this](std::shared_ptr<Chunk> chunk) { chunk->readLock(); },
+			[this](int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) { return getChunk(uChunkX, uChunkY, uChunkZ); });
 	}
 
 	template <typename VoxelType, typename RWLockType>
 	void PagedVolume<VoxelType, RWLockType>::readUnlockRegion(const Region& region) const
 	{
-		applyOnChunks(region, [this](std::shared_ptr<Chunk> chunk) { chunk->readUnlock(); }, getChunk);
+		applyOnChunks(region,
+			[this](std::shared_ptr<Chunk> chunk) { chunk->readUnlock(); },
+			[this](int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) { return getChunk(uChunkX, uChunkY, uChunkZ); });
 	}
 
 	template <typename VoxelType, typename RWLockType>
 	void PagedVolume<VoxelType, RWLockType>::writeLockRegion(const Region& region) const
 	{
-		applyOnChunks(region, [this](std::shared_ptr<Chunk> chunk) { chunk->writeLock(); }, getChunk);
+		applyOnChunks(region,
+			[this](std::shared_ptr<Chunk> chunk) { chunk->writeLock(); },
+			[this](int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) { return getChunk(uChunkX, uChunkY, uChunkZ); });
 	}
 
 	template <typename VoxelType, typename RWLockType>
 	void PagedVolume<VoxelType, RWLockType>::writeUnlockRegion(const Region& region) const
 	{
-		applyOnChunks(region, [this](std::shared_ptr<Chunk> chunk) { chunk->writeUnlock(); }, getChunk);
+		applyOnChunks(region,
+			[this](std::shared_ptr<Chunk> chunk) { chunk->writeUnlock(); },
+			[this](int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) { return getChunk(uChunkX, uChunkY, uChunkZ); });
 	}
 
 	template <typename VoxelType, typename RWLockType>

@@ -235,6 +235,51 @@ namespace PolyVox
 	}
 
 	////////////////////////////////////////////////////////////////////////////////
+	/// Removes all the voxels in the given region from memory, and calls dataOverflowHandler() to ensure the application has a chance to store the data.
+	////////////////////////////////////////////////////////////////////////////////
+	template <typename VoxelType, typename RWLockType>
+	void PagedVolume<VoxelType, RWLockType>::flush(const Region& regFlush)
+	{
+		AutoWriteLock<RWLockType> lock(&m_internalLock);
+
+		applyOnChunks(regFlush,
+			[this](std::tuple<int32_t, int32_t, int32_t> chunkPos)
+			{
+				int32_t uChunkX, uChunkY, uChunkZ;
+				std::tie(uChunkX, uChunkY, uChunkZ) = chunkPos;
+
+				const uint32_t iPosisionHash = getPositionHash(uChunkX, uChunkY, uChunkZ);
+
+				// Starting at the position indicated by the hash, and then search through the whole array looking for a chunk with the correct
+				// position. In most cases we expect to find it in the first place we look. Note that this algorithm is slow in the case that
+				// the chunk is not found because the whole array has to be searched, but in this case we are going to have to page the data in
+				// from an external source which is likely to be slow anyway.
+				uint32_t iIndex = iPosisionHash;
+				do
+				{
+					if (m_arrayChunks[iIndex])
+					{
+						Vector3DInt32& entryPos = m_arrayChunks[iIndex]->m_v3dChunkSpacePosition;
+						if (entryPos.getX() == uChunkX && entryPos.getY() == uChunkY && entryPos.getZ() == uChunkZ)
+						{
+							m_arrayChunks[iIndex].reset();
+							break;
+						}
+					}
+
+					iIndex++;
+					iIndex %= uChunkArraySize;
+				} while (iIndex != iPosisionHash); // Keep searching until we get back to our start position.
+			},
+			// Forward chunk position as a tuple
+			[](int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ)
+			{
+				return std::tie(uChunkX, uChunkY, uChunkZ);
+			}
+		);
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
 	/// Removes all voxels from memory, and calls dataOverflowHandler() to ensure the application has a chance to store the data.
 	////////////////////////////////////////////////////////////////////////////////
 	template <typename VoxelType, typename RWLockType>
@@ -270,8 +315,8 @@ namespace PolyVox
 		}
 
 		// Ensure we don't page in more chunks than the volume can hold.
-		Region region(v3dStart, v3dEnd);
-		uint32_t uNoOfChunks = static_cast<uint32_t>(region.getWidthInVoxels() * region.getHeightInVoxels() * region.getDepthInVoxels());
+		Region chunkRegion(v3dStart, v3dEnd);
+		uint32_t uNoOfChunks = static_cast<uint32_t>(chunkRegion.getWidthInVoxels() * chunkRegion.getHeightInVoxels() * chunkRegion.getDepthInVoxels());
 		POLYVOX_LOG_WARNING_IF(uNoOfChunks > m_uChunkCountLimit, "Attempting to access more than the maximum number of chunks (this will cause thrashing).");
 		uNoOfChunks = (std::min)(uNoOfChunks, m_uChunkCountLimit);
 
@@ -320,10 +365,8 @@ namespace PolyVox
 	}
 
 	template <typename VoxelType, typename RWLockType>
-	std::shared_ptr<typename PagedVolume<VoxelType, RWLockType>::Chunk> PagedVolume<VoxelType, RWLockType>::tryGetChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const
+	uint32_t PagedVolume<VoxelType, RWLockType>::getPositionHash(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const
 	{
-		std::shared_ptr<Chunk> pChunk;
-
 		// We generate a 16-bit hash here and assume this matches the range available in the chunk
 		// array. The assert here is just to make sure we take care if change this in the future.
 		static_assert(uChunkArraySize == 65536, "Chunk array size has changed, check if the hash calculation needs updating.");
@@ -332,9 +375,19 @@ namespace PolyVox
 		const uint32_t uChunkYLowerBits = static_cast<uint32_t>(uChunkY & 0x1F);
 		const uint32_t uChunkZLowerBits = static_cast<uint32_t>(uChunkZ & 0x1F);
 		// Combine then to form a 15-bit hash of the position. Also shift by one to spread the values out in the whole 16-bit space.
-		const uint32_t iPosisionHash = (((uChunkXLowerBits)) | ((uChunkYLowerBits) << 5) | ((uChunkZLowerBits) << 10) << 1);
+		const uint32_t iPositionHash = (((uChunkXLowerBits)) | ((uChunkYLowerBits) << 5) | ((uChunkZLowerBits) << 10) << 1);
 
-		{ // First try to get the chunk in read-only mode
+		return iPositionHash;
+	}
+
+	template <typename VoxelType, typename RWLockType>
+	std::shared_ptr<typename PagedVolume<VoxelType, RWLockType>::Chunk> PagedVolume<VoxelType, RWLockType>::tryGetChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const
+	{
+		std::shared_ptr<Chunk> pChunk;
+
+		const uint32_t iPosisionHash = getPositionHash(uChunkX, uChunkY, uChunkZ);
+
+		{ // Try to get the chunk in read-only mode
 			AutoReadLock<RWLockType> lock(&m_internalLock);
 			pChunk = getExistingChunk(iPosisionHash, uChunkX, uChunkY, uChunkZ);
 		}
@@ -347,15 +400,7 @@ namespace PolyVox
 	{
 		std::shared_ptr<Chunk> pChunk;
 
-		// We generate a 16-bit hash here and assume this matches the range available in the chunk
-		// array. The assert here is just to make sure we take care if change this in the future.
-		static_assert(uChunkArraySize == 65536, "Chunk array size has changed, check if the hash calculation needs updating.");
-		// Extract the lower five bits from each position component.
-		const uint32_t uChunkXLowerBits = static_cast<uint32_t>(uChunkX & 0x1F);
-		const uint32_t uChunkYLowerBits = static_cast<uint32_t>(uChunkY & 0x1F);
-		const uint32_t uChunkZLowerBits = static_cast<uint32_t>(uChunkZ & 0x1F);
-		// Combine then to form a 15-bit hash of the position. Also shift by one to spread the values out in the whole 16-bit space.
-		const uint32_t iPosisionHash = (((uChunkXLowerBits)) | ((uChunkYLowerBits) << 5) | ((uChunkZLowerBits) << 10) << 1);
+		const uint32_t iPosisionHash = getPositionHash(uChunkX, uChunkY, uChunkZ);
 
 		{ // First try to get the chunk in read-only mode
 			AutoReadLock<RWLockType> lock(&m_internalLock);
@@ -366,7 +411,7 @@ namespace PolyVox
 		{
 			bool pageInChunk = false;
 			{
-				// If the chunk was not found, attempt to get it with exclusive lock in case one create it in the meantime.
+				// If the chunk was not found, attempt to get it with exclusive lock in case one created it in the meantime.
 				AutoWriteLock<RWLockType> writeLock(&m_internalLock);
 				PIXBeginEvent(PIX_COLOR_DEFAULT, "GetExistingChunk");
 				pChunk = getExistingChunk(iPosisionHash, uChunkX, uChunkY, uChunkZ);

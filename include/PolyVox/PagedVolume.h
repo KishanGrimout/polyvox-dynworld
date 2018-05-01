@@ -343,6 +343,7 @@ namespace PolyVox
 		RegionStatus getRegionStatus(const Region& regQuery);
 		/// Tries to ensure that the voxels within the specified Region are loaded into memory.
 		void prefetch(const Region& regPrefetch);
+		void flush(const Region& regFlush);
 		/// Removes all voxels from memory
 		void flushAll();
 
@@ -376,6 +377,7 @@ namespace PolyVox
 	private:
 		template <typename Get, typename F>
 		void applyOnChunks(const Region& region, F operation, Get getChunkF) const;
+		uint32_t getPositionHash(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const;
 		std::shared_ptr<Chunk> tryGetChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const;
 		std::shared_ptr<Chunk> getChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const;
 		std::shared_ptr<Chunk> getExistingChunk(uint32_t iPosisionHash, int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const;

@@ -29,6 +29,7 @@
 #include "Region.h"
 #include "Vector.h"
 
+#include <atomic> //NOTE(dynworld): paging-in-progress chunk flag (P3a')
 #include <limits>
 #include <cstdlib> //For abort()
 #include <cstring> //For memcpy
@@ -137,6 +138,16 @@ namespace PolyVox
 			bool getDataModified() const;
 			bool isLocked() const;
 
+			// NOTE(dynworld) P3a': true while the pager is filling this chunk's
+			// buffer with no volume/chunk locks held. Readers must wait for it
+			// to clear (spin, without holding locks) before reading the buffer;
+			// getVoxel/getChunk enforce this, so only code that knows it owns
+			// the page-in window (the pager itself) may skip the check.
+			bool isPagingInProgress() const
+			{
+				return m_bPagingInProgress.load(std::memory_order_acquire);
+			}
+
 			void changeLinearOrderingToMorton(void);
 			void changeMortonOrderingToLinear(void);
 
@@ -178,6 +189,14 @@ namespace PolyVox
 			Vector3DInt32 m_v3dChunkSpacePosition;
 
 			mutable RWLockType m_lock;
+
+			// NOTE(dynworld) P3a': raised before the chunk is published into the
+			// chunk array and cleared when the pager body completes, so readers
+			// never observe uninitialized buffer contents. While it is set the
+			// chunk write lock is NOT held - waiting readers spin on the flag
+			// instead of blocking on the lock, so the wait does not hold the
+			// volume internal lock read (the P3c contention chain).
+			std::atomic<bool> m_bPagingInProgress{ false };
 		};
 
 		class IChunkCache
@@ -387,6 +406,13 @@ namespace PolyVox
 		mutable uint32_t m_uTimestamper = 0;
 
 		uint32_t m_uChunkCountLimit = 0;
+
+		// NOTE(dynworld) P3b: number of chunks currently in m_arrayChunks,
+		// maintained incrementally under the internal write lock (creations,
+		// evictions, flushes) so the O(uChunkArraySize) eviction scan only runs
+		// when the limit is actually exceeded. Read under the internal read
+		// lock by calculateSizeInBytes().
+		mutable uint32_t m_uChunkCount = 0;
 
 		// Chunks are stored in the following array which is used as a hash-table. Conventional wisdom is that such a hash-table
 		// should not be more than half full to avoid conflicts, and a practical chunk size seems to be 64^3. With this configuration

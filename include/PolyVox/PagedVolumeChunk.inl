@@ -156,7 +156,10 @@ namespace PolyVox
 	template <typename VoxelType, typename RWLockType>
 	bool PagedVolume<VoxelType, RWLockType>::Chunk::isLocked() const
 	{
-		return m_lock.isLocked();
+		// NOTE(dynworld) P3a': with the page-in no longer holding the chunk
+		// write lock, the paging flag is what marks a chunk as "load in
+		// progress" for getRegionStatus (region-status semantics).
+		return m_lock.isLocked() || m_bPagingInProgress.load(std::memory_order_seq_cst);
 	}
 
 	template <typename VoxelType, typename RWLockType>

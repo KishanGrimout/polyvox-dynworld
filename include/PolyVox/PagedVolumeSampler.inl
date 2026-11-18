@@ -88,7 +88,9 @@ namespace PolyVox
 
 		std::shared_ptr<_Myt::Chunk> pCurrentChunk = this->mVolume->m_pChunkCache->getChunkCached(this->mVolume, uXChunk, uYChunk, uZChunk).lock();
 
-		if (pCurrentChunk == nullptr)
+		// NOTE(dynworld) P3a': a cached chunk can still be mid-page-in; fall
+		// through to getChunk, which waits on the paging flag with no locks held.
+		if (pCurrentChunk == nullptr || pCurrentChunk->isPagingInProgress())
 			pCurrentChunk = this->mVolume->getChunk(uXChunk, uYChunk, uZChunk);
 
 		AutoReadLock<_Myt::Chunk> lock(pCurrentChunk.get());

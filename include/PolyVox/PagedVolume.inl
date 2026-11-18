@@ -26,6 +26,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <thread> //NOTE(dynworld): std::this_thread::yield for the paging-flag wait (P3a')
 
 namespace PolyVox
 {
@@ -141,7 +142,9 @@ namespace PolyVox
 
 		std::shared_ptr<Chunk> pChunk = m_pChunkCache->getChunkCached(this, chunkX, chunkY, chunkZ).lock();
 
-		if (pChunk == nullptr)
+		// NOTE(dynworld) P3a': a cached chunk can still be mid-page-in; fall
+		// through to getChunk, which waits on the paging flag with no locks held.
+		if (pChunk == nullptr || pChunk->isPagingInProgress())
 			pChunk = getChunk(chunkX, chunkY, chunkZ);
 
 		AutoReadLock<_Myt::Chunk> chunkLock(pChunk.get());
@@ -178,7 +181,9 @@ namespace PolyVox
 
 		std::shared_ptr<Chunk> pChunk = m_pChunkCache->getChunkCached(this, chunkX, chunkY, chunkZ).lock();
 
-		if (pChunk == nullptr)
+		// NOTE(dynworld) P3a': a cached chunk can still be mid-page-in; fall
+		// through to getChunk, which waits on the paging flag with no locks held.
+		if (pChunk == nullptr || pChunk->isPagingInProgress())
 			pChunk = getChunk(chunkX, chunkY, chunkZ);
 
 		AutoWriteLock<_Myt::Chunk> lock(pChunk.get());
@@ -263,6 +268,8 @@ namespace PolyVox
 						if (entryPos.getX() == uChunkX && entryPos.getY() == uChunkY && entryPos.getZ() == uChunkZ)
 						{
 							m_arrayChunks[iIndex].reset();
+							// NOTE(dynworld) P3b: keep the incremental chunk count in sync.
+							m_uChunkCount--;
 							break;
 						}
 					}
@@ -295,6 +302,9 @@ namespace PolyVox
 		{
 			m_arrayChunks[uIndex] = nullptr;
 		}
+
+		// NOTE(dynworld) P3b: keep the incremental chunk count in sync.
+		m_uChunkCount = 0;
 	}
 
 	template <typename VoxelType, typename RWLockType>
@@ -342,6 +352,12 @@ namespace PolyVox
 		// position. In most cases we expect to find it in the first place we look. Note that this algorithm is slow in the case that
 		// the chunk is not found because the whole array has to be searched, but in this case we are going to have to page the data in
 		// from an external source which is likely to be slow anyway.
+		// NOTE(dynworld) P3a': this lookup no longer acquires the chunk read
+		// lock (which used to block it until an in-progress pageIn released the
+		// chunk write lock, while the caller held the internal lock read). The
+		// wait now happens in getChunk on the chunk's paging flag, with no
+		// locks held; callers must honor isPagingInProgress() before reading
+		// the buffer (getVoxel/setVoxel/the samplers do).
 		uint32_t iIndex = iPosisionHash;
 		do
 		{
@@ -351,7 +367,6 @@ namespace PolyVox
 				if (entryPos.getX() == uChunkX && entryPos.getY() == uChunkY && entryPos.getZ() == uChunkZ)
 				{
 					pChunk = m_arrayChunks[iIndex];
-					AutoReadLock<_Myt::Chunk> lock(pChunk.get()); // this will also wait for this chunk to be paged in if it's in progress
 					pChunk->m_uChunkLastAccessed = RWLockType::preIncr(m_uTimestamper);
 					break;
 				}
@@ -402,13 +417,39 @@ namespace PolyVox
 
 		const uint32_t iPosisionHash = getPositionHash(uChunkX, uChunkY, uChunkZ);
 
-		{ // First try to get the chunk in read-only mode
-			AutoReadLock<RWLockType> lock(&m_internalLock);
-			pChunk = getExistingChunk(iPosisionHash, uChunkX, uChunkY, uChunkZ);
-		}
-
-		if (!pChunk)
+		// NOTE(dynworld) P3a': the loop below re-runs the lookup after waiting
+		// on a chunk whose page-in is in progress, so that a chunk which got
+		// evicted (or replaced by another creator) during the wait is not
+		// returned stale.
+		while (true)
 		{
+			{ // First try to get the chunk in read-only mode
+				// NOTE(dynworld): timed as the reader-wait site (VPL) - this lookup no
+				// longer blocks on the chunk read lock while an in-progress pageIn
+				// fills the buffer; that wait moved to the flag spin below (P3a'),
+				// so the volume internal lock read is not held across the wait (P3c).
+				PIXBeginEvent(PIX_COLOR_DEFAULT, "ReadLookupChunk");
+				AutoReadLock<RWLockType> lock(&m_internalLock);
+				pChunk = getExistingChunk(iPosisionHash, uChunkX, uChunkY, uChunkZ);
+				PIXEndEvent();
+			}
+
+			if (pChunk)
+			{
+				if (!pChunk->isPagingInProgress())
+					break; // chunk is ready
+
+				// Pager work in progress: wait WITHOUT holding any volume lock
+				// (the pager body runs with no chunk write lock anymore), then
+				// re-lookup in case the chunk was evicted/recreated meanwhile.
+				// NOTE(dynworld): timed as the page-in wait site.
+				PIXBeginEvent(PIX_COLOR_DEFAULT, "WaitPagingChunk");
+				while (pChunk->isPagingInProgress())
+					std::this_thread::yield();
+				PIXEndEvent();
+				continue;
+			}
+
 			bool pageInChunk = false;
 			{
 				// If the chunk was not found, attempt to get it with exclusive lock in case one created it in the meantime.
@@ -424,7 +465,12 @@ namespace PolyVox
 					PIXBeginEvent(PIX_COLOR_DEFAULT, "CreateChunk");
 					Vector3DInt32 v3dChunkPos(uChunkX, uChunkY, uChunkZ);
 					pChunk = std::make_shared<Chunk>(v3dChunkPos, m_uChunkSideLength, m_pPager);
-					pChunk->writeLock();
+					// NOTE(dynworld) P3a': the flag is raised BEFORE the chunk is
+					// published into the array so no reader can observe the
+					// uninitialized buffer; the chunk write lock is no longer
+					// taken for the page-in window - readers wait on the flag
+					// with no locks held instead.
+					pChunk->m_bPagingInProgress.store(true, std::memory_order_seq_cst);
 					pageInChunk = true;
 					PIXEndEvent();
 
@@ -454,34 +500,45 @@ namespace PolyVox
 					// significantly under the target amount. Perhaps if chunks are 'pinned' for threading purposes?
 					POLYVOX_THROW_IF(!bInsertedSucessfully, std::logic_error, "No space in chunk array for new chunk.");
 
+					// NOTE(dynworld) P3b: the chunk count is maintained incrementally,
+					// so the O(uChunkArraySize) oldest-chunk scan only runs when the
+					// limit is actually exceeded (not on every creation).
+					m_uChunkCount++;
+
 					// As we have added a chunk we may have exceeded our target chunk limit. Search through the array to
-					// determine how many chunks we have, as well as finding the oldest timestamp. Note that this is potentially
-					// wasteful and we may instead wish to track how many chunks we have and/or delete a chunk at random (or
-					// just check e.g. 10 and delete the oldest of those) but we'll see if this is a bottleneck first. Paging
-					// the data in is probably more expensive.
-					uint32_t uChunkCount = 0;
-					uint32_t uOldestChunkIndex = 0;
-					uint32_t uOldestChunkTimestamp = std::numeric_limits<uint32_t>::max();
-					PIXBeginEvent(PIX_COLOR_DEFAULT, "SearchOldestChunk");
-					for (uint32_t uIndex = 0; uIndex < uChunkArraySize; uIndex++)
+					// find the oldest timestamp. Paging the data in is probably more expensive than this scan, but it
+					// is kept out of the common path now.
+					if (m_uChunkCount > m_uChunkCountLimit)
 					{
-						if (m_arrayChunks[uIndex])
+						uint32_t uOldestChunkIndex = 0;
+						uint32_t uOldestChunkTimestamp = std::numeric_limits<uint32_t>::max();
+						PIXBeginEvent(PIX_COLOR_DEFAULT, "SearchOldestChunk");
+						for (uint32_t uIndex = 0; uIndex < uChunkArraySize; uIndex++)
 						{
-							uChunkCount++;
-							if (m_arrayChunks[uIndex]->m_uChunkLastAccessed < uOldestChunkTimestamp)
+							if (m_arrayChunks[uIndex])
 							{
-								uOldestChunkTimestamp = m_arrayChunks[uIndex]->m_uChunkLastAccessed;
-								uOldestChunkIndex = uIndex;
+								// NOTE(dynworld) P3a': never pick a chunk whose pageIn is
+								// still in progress as an eviction candidate - its buffer
+								// is being filled outside all locks by the pager thread.
+								if (m_arrayChunks[uIndex]->m_bPagingInProgress.load(std::memory_order_relaxed))
+									continue;
+
+								if (m_arrayChunks[uIndex]->m_uChunkLastAccessed < uOldestChunkTimestamp)
+								{
+									uOldestChunkTimestamp = m_arrayChunks[uIndex]->m_uChunkLastAccessed;
+									uOldestChunkIndex = uIndex;
+								}
 							}
 						}
-					}
-					PIXEndEvent();
+						PIXEndEvent();
 
-					// Check if we have too many chunks, and delete the oldest if so.
-					if (uChunkCount > m_uChunkCountLimit)
-					{
-						PIXScopedEvent(PIX_COLOR_DEFAULT, "DeleteOldestChunk");
-						m_arrayChunks[uOldestChunkIndex] = nullptr;
+						// Check if we have too many chunks, and delete the oldest if so.
+						if (uOldestChunkTimestamp != std::numeric_limits<uint32_t>::max())
+						{
+							PIXScopedEvent(PIX_COLOR_DEFAULT, "DeleteOldestChunk");
+							m_arrayChunks[uOldestChunkIndex] = nullptr;
+							m_uChunkCount--;
+						}
 					}
 				}
 			}
@@ -489,8 +546,21 @@ namespace PolyVox
 			{
 				PIXScopedEvent(PIX_COLOR_DEFAULT, "PageInChunk");
 				pChunk->pageIn();
+
+				// NOTE(dynworld) P3a' finalize: the chunk lock was never taken for
+				// the page-in window; this brief lock pair is a hard barrier that
+				// serializes the pager's buffer writes against any chunk-lock user
+				// (e.g. a region lock) that raced past the flag check, before the
+				// flag release-store below publishes the completed data.
+				pChunk->writeLock();
 				pChunk->writeUnlock();
+				pChunk->m_bPagingInProgress.store(false, std::memory_order_seq_cst);
+				break;
 			}
+
+			// The chunk was created by another thread and may still be paging in;
+			// loop back through the read branch so the paging-flag wait applies
+			// to us as well.
 		}
 
 		m_pChunkCache->setChunkCached(this, pChunk, uChunkX, uChunkY, uChunkZ);
@@ -506,18 +576,12 @@ namespace PolyVox
 	{
 		AutoReadLock<RWLockType> lock(&m_internalLock);
 
-		uint32_t uChunkCount = 0;
-		for (uint32_t uIndex = 0; uIndex < uChunkArraySize; uIndex++)
-		{
-			if (m_arrayChunks[uIndex])
-			{
-				uChunkCount++;
-			}
-		}
+		// NOTE(dynworld) P3b: the chunk count is maintained incrementally, no
+		// O(uChunkArraySize) scan needed here anymore.
 
 		// Note: We disregard the size of the other class members as they are likely to be very small compared to the size of the
 		// allocated voxel data. This also keeps the reported size as a power of two, which makes other memory calculations easier.
-		return _Myt::Chunk::calculateSizeInBytes(m_uChunkSideLength) * uChunkCount;
+		return _Myt::Chunk::calculateSizeInBytes(m_uChunkSideLength) * m_uChunkCount;
 	}
 
 	template <typename VoxelType, typename RWLockType>

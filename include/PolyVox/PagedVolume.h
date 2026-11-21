@@ -29,7 +29,7 @@
 #include "Region.h"
 #include "Vector.h"
 
-#include <atomic> //NOTE(dynworld): paging-in-progress chunk flag (P3a')
+#include <atomic>
 #include <limits>
 #include <cstdlib> //For abort()
 #include <cstring> //For memcpy
@@ -138,7 +138,7 @@ namespace PolyVox
 			bool getDataModified() const;
 			bool isLocked() const;
 
-			// NOTE(dynworld) P3a': true while the pager is filling this chunk's
+			// NOTE(dynworld): true while the pager is filling this chunk's
 			// buffer with no volume/chunk locks held. Readers must wait for it
 			// to clear (spin, without holding locks) before reading the buffer;
 			// getVoxel/getChunk enforce this, so only code that knows it owns
@@ -190,12 +190,12 @@ namespace PolyVox
 
 			mutable RWLockType m_lock;
 
-			// NOTE(dynworld) P3a': raised before the chunk is published into the
+			// NOTE(dynworld): raised before the chunk is published into the
 			// chunk array and cleared when the pager body completes, so readers
 			// never observe uninitialized buffer contents. While it is set the
 			// chunk write lock is NOT held - waiting readers spin on the flag
 			// instead of blocking on the lock, so the wait does not hold the
-			// volume internal lock read (the P3c contention chain).
+			// volume internal lock read (the former contention chain).
 			std::atomic<bool> m_bPagingInProgress{ false };
 		};
 
@@ -407,7 +407,7 @@ namespace PolyVox
 
 		uint32_t m_uChunkCountLimit = 0;
 
-		// NOTE(dynworld) P3b: number of chunks currently in m_arrayChunks,
+		// NOTE(dynworld): number of chunks currently in m_arrayChunks,
 		// maintained incrementally under the internal write lock (creations,
 		// evictions, flushes) so the O(uChunkArraySize) eviction scan only runs
 		// when the limit is actually exceeded. Read under the internal read
